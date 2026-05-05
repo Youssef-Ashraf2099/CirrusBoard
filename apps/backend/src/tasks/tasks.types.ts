@@ -1,4 +1,4 @@
-export type Role = 'Manager' | 'Employee' | 'Admin';
+export type Role = "Manager" | "Employee" | "Admin";
 
 export interface UserPrincipal {
   userId: string;
@@ -10,8 +10,8 @@ export interface TaskItem {
   taskId: string;
   title: string;
   description?: string;
-  status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
-  priority?: 'Low' | 'Medium' | 'High';
+  status: "To Do" | "In Progress" | "In Review" | "Done";
+  priority?: "Low" | "Medium" | "High";
   deadline?: string; // ISO date
   assigneeId?: string;
   teamId: string;
