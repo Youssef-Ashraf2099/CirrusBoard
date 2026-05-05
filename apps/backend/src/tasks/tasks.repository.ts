@@ -1,19 +1,19 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject } from "@nestjs/common";
 import {
   DynamoDBDocumentClient,
   PutCommand,
   GetCommand,
   UpdateCommand,
   DeleteCommand,
-  QueryCommand
-} from '@aws-sdk/lib-dynamodb';
-import { TaskItem } from './tasks.types';
+  QueryCommand,
+} from "@aws-sdk/lib-dynamodb";
+import { TaskItem } from "./tasks.types";
 
 @Injectable()
 export class TasksRepository {
   constructor(
-    @Inject('DYNAMO_CLIENT') private readonly client: DynamoDBDocumentClient,
-    @Inject('TASKS_TABLE') private readonly tableName: string
+    @Inject("DYNAMO_CLIENT") private readonly client: DynamoDBDocumentClient,
+    @Inject("TASKS_TABLE") private readonly tableName: string,
   ) {}
 
   async createTask(task: TaskItem): Promise<TaskItem> {
@@ -28,7 +28,10 @@ export class TasksRepository {
     return (res as any).Item ?? null;
   }
 
-  async updateTask(taskId: string, updates: Partial<TaskItem>): Promise<TaskItem> {
+  async updateTask(
+    taskId: string,
+    updates: Partial<TaskItem>,
+  ): Promise<TaskItem> {
     // Build update expression
     const ExpressionAttributeNames: Record<string, string> = {};
     const ExpressionAttributeValues: Record<string, any> = {};
@@ -43,32 +46,44 @@ export class TasksRepository {
       setParts.push(`${nameKey} = ${valKey}`);
     }
 
-    const UpdateExpression = setParts.length ? `SET ${setParts.join(', ')}` : undefined;
+    const UpdateExpression = setParts.length
+      ? `SET ${setParts.join(", ")}`
+      : undefined;
 
     const cmd = new UpdateCommand({
       TableName: this.tableName,
       Key: { taskId },
       UpdateExpression,
-      ExpressionAttributeNames: Object.keys(ExpressionAttributeNames).length ? ExpressionAttributeNames : undefined,
-      ExpressionAttributeValues: Object.keys(ExpressionAttributeValues).length ? ExpressionAttributeValues : undefined,
-      ReturnValues: 'ALL_NEW'
+      ExpressionAttributeNames: Object.keys(ExpressionAttributeNames).length
+        ? ExpressionAttributeNames
+        : undefined,
+      ExpressionAttributeValues: Object.keys(ExpressionAttributeValues).length
+        ? ExpressionAttributeValues
+        : undefined,
+      ReturnValues: "ALL_NEW",
     });
     const res = await this.client.send(cmd as any);
     return (res as any).Attributes as TaskItem;
   }
 
   async deleteTask(taskId: string): Promise<void> {
-    const cmd = new DeleteCommand({ TableName: this.tableName, Key: { taskId } });
+    const cmd = new DeleteCommand({
+      TableName: this.tableName,
+      Key: { taskId },
+    });
     await this.client.send(cmd as any);
   }
 
-  async queryTasksByTeamId(teamId: string, indexName = 'teamId-index'): Promise<TaskItem[]> {
+  async queryTasksByTeamId(
+    teamId: string,
+    indexName = "teamId-index",
+  ): Promise<TaskItem[]> {
     const cmd = new QueryCommand({
       TableName: this.tableName,
       IndexName: indexName,
-      KeyConditionExpression: '#teamId = :teamId',
-      ExpressionAttributeNames: { '#teamId': 'teamId' },
-      ExpressionAttributeValues: { ':teamId': teamId }
+      KeyConditionExpression: "#teamId = :teamId",
+      ExpressionAttributeNames: { "#teamId": "teamId" },
+      ExpressionAttributeValues: { ":teamId": teamId },
     });
     const res = await this.client.send(cmd as any);
     return (res as any).Items ?? [];

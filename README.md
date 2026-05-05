@@ -15,4 +15,5 @@ Local AWS simulation (DynamoDB Local + LocalStack):
 ```bash
 docker compose up -d
 ```
+
 # project Jira+Trello
