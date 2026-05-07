@@ -2,7 +2,9 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "declaration": true,
-    "sourceMap": false
+    "sourceMap": false,
+    "skipLibCheck": true,
+    "lib": ["ES2020"]
   },
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
 }
