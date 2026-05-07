@@ -1,5 +1,25 @@
 version: "3.8"
 services:
+  backend:
+    build: ./apps/backend
+    env_file: .env
+    environment:
+      - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT}
+      - TASKS_TABLE=${TASKS_TABLE}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - dynamodb
+      - localstack
+  dynamodb-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      - dynamodb
+    env_file: .env
+    volumes:
+      - ./scripts:/scripts:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command: "/scripts/dynamodb-init.sh"
   dynamodb:
     image: amazon/dynamodb-local:latest
     container_name: dynamodb-local
