@@ -56,26 +56,27 @@ Stores all authenticated users synchronized with AWS Cognito.
 
 # Primary Key
 
-| Key | Value |
-|---|---|
-| PK | USER#<userId> |
+| Key | Value         |
+| --- | ------------- |
+| PK  | USER#<userId> |
 
 ---
 
 # Columns
 
-| Column | Type | Mandatory | Description |
-|---|---|---|---|
-| PK | string | YES | Partition key |
-| email | string | YES | User email |
-| name | string | YES | Full name |
-| role | string | YES | EMPLOYEE / MANAGER / ADMIN |
-| primaryTeamId | string | YES | Main team |
-| teamIds | string[] | YES | Accessible teams |
-| cognitoSub | string | YES | Cognito user identifier |
-| isActive | boolean | YES | User active status |
-| createdAt | string | YES | ISO timestamp |
-| updatedAt | string | YES | ISO timestamp |
+| Column        | Type     | Mandatory | Description             |
+| ------------- | -------- | --------- | ----------------------- | --------- | ------ |
+| PK            | string   | YES       | Partition key           |
+| email         | string   | YES       | User email              |
+| name          | string   | YES       | Full name               |
+| role          | string   | YES       | EMPLOYEE / MANAGER      |
+| password      | string   | YES       | Hashed password         |
+| primaryTeamId | string   | YES       | Main team               |
+| teamIds       | string[] | YES       | Accessible teams        |
+| cognitoSub    | string   | YES       | Cognito user identifier | encrypted | hashed |
+| isActive      | boolean  | YES       | User active status      |
+| createdAt     | string   | YES       | ISO timestamp           |
+| updatedAt     | string   | YES       | ISO timestamp           |
 
 ---
 
@@ -88,9 +89,7 @@ Stores all authenticated users synchronized with AWS Cognito.
   "name": "Sara Ahmed",
   "role": "EMPLOYEE",
   "primaryTeamId": "TEAM#frontend",
-  "teamIds": [
-    "TEAM#frontend"
-  ],
+  "teamIds": ["TEAM#frontend"],
   "cognitoSub": "3f234af2-xxxx-xxxx",
   "isActive": true,
   "createdAt": "2026-05-01T10:00:00Z",
@@ -125,22 +124,22 @@ Examples:
 
 # Primary Key
 
-| Key | Value |
-|---|---|
-| PK | TEAM#<teamId> |
+| Key | Value         |
+| --- | ------------- |
+| PK  | TEAM#<teamId> |
 
 ---
 
 # Columns
 
-| Column | Type | Mandatory | Description |
-|---|---|---|---|
-| PK | string | YES | Partition key |
-| name | string | YES | Team name |
-| description | string | NO | Team description |
-| createdBy | string | YES | Creator user id |
-| createdAt | string | YES | ISO timestamp |
-| updatedAt | string | YES | ISO timestamp |
+| Column      | Type   | Mandatory | Description      |
+| ----------- | ------ | --------- | ---------------- |
+| PK          | string | YES       | Partition key    |
+| name        | string | YES       | Team name        |
+| description | string | NO        | Team description |
+| createdBy   | string | YES       | Creator user id  |
+| createdAt   | string | YES       | ISO timestamp    |
+| updatedAt   | string | YES       | ISO timestamp    |
 
 ---
 
@@ -177,23 +176,23 @@ Stores company projects.
 
 # Primary Key
 
-| Key | Value |
-|---|---|
-| PK | PROJECT#<projectId> |
+| Key | Value               |
+| --- | ------------------- |
+| PK  | PROJECT#<projectId> |
 
 ---
 
 # Columns
 
-| Column | Type | Mandatory | Description |
-|---|---|---|---|
-| PK | string | YES | Partition key |
-| title | string | YES | Project title |
-| description | string | NO | Project description |
-| status | string | YES | ACTIVE / ARCHIVED |
-| createdBy | string | YES | Creator user id |
-| createdAt | string | YES | ISO timestamp |
-| updatedAt | string | YES | ISO timestamp |
+| Column      | Type   | Mandatory | Description         |
+| ----------- | ------ | --------- | ------------------- |
+| PK          | string | YES       | Partition key       |
+| title       | string | YES       | Project title       |
+| description | string | NO        | Project description |
+| status      | string | YES       | ACTIVE / ARCHIVED   |
+| createdBy   | string | YES       | Creator user id     |
+| createdAt   | string | YES       | ISO timestamp       |
+| updatedAt   | string | YES       | ISO timestamp       |
 
 ---
 
@@ -237,31 +236,31 @@ Stores all tasks and supports:
 
 # Primary Key
 
-| Key | Value |
-|---|---|
-| PK | TASK#<taskId> |
+| Key | Value         |
+| --- | ------------- |
+| PK  | TASK#<taskId> |
 
 ---
 
 # Columns
 
-| Column | Type | Mandatory | Description |
-|---|---|---|---|
-| PK | string | YES | Partition key |
-| projectId | string | YES | Linked project |
-| teamId | string | YES | Owning team |
-| assigneeId | string | YES | Assigned user |
-| title | string | YES | Task title |
-| description | string | NO | Task description |
-| status | string | YES | TODO / IN_PROGRESS / IN_REVIEW / DONE |
-| priority | string | YES | LOW / MEDIUM / HIGH / CRITICAL |
-| deadline | string | YES | Due date |
-| createdBy | string | YES | Task creator |
-| createdAt | string | YES | ISO timestamp |
-| updatedAt | string | YES | ISO timestamp |
-| deleted | boolean | YES | Soft delete flag |
-| latestThumbnailUrl | string | NO | Latest image thumbnail |
-| attachments | list | NO | Image/file metadata |
+| Column             | Type    | Mandatory | Description                           |
+| ------------------ | ------- | --------- | ------------------------------------- |
+| PK                 | string  | YES       | Partition key                         |
+| projectId          | string  | YES       | Linked project                        |
+| teamId             | string  | YES       | Owning team                           |
+| assigneeId         | string  | YES       | Assigned user                         |
+| title              | string  | YES       | Task title                            |
+| description        | string  | NO        | Task description                      |
+| status             | string  | YES       | TODO / IN_PROGRESS / IN_REVIEW / DONE |
+| priority           | string  | YES       | LOW / MEDIUM / HIGH / CRITICAL        |
+| deadline           | string  | YES       | Due date                              |
+| createdBy          | string  | YES       | Task creator                          |
+| createdAt          | string  | YES       | ISO timestamp                         |
+| updatedAt          | string  | YES       | ISO timestamp                         |
+| deleted            | boolean | YES       | Soft delete flag                      |
+| latestThumbnailUrl | string  | NO        | Latest image thumbnail                |
+| attachments        | list    | NO        | Image/file metadata                   |
 
 ---
 
@@ -337,26 +336,26 @@ Optimized for:
 
 # Primary Key
 
-| Key | Value |
-|---|---|
-| PK | TASK#<taskId> |
-| SK | COMMENT#<timestamp>#<commentId> |
+| Key | Value                           |
+| --- | ------------------------------- |
+| PK  | TASK#<taskId>                   |
+| SK  | COMMENT#<timestamp>#<commentId> |
 
 ---
 
 # Columns
 
-| Column | Type | Mandatory | Description |
-|---|---|---|---|
-| PK | string | YES | Parent task |
-| SK | string | YES | Sort key |
-| commentId | string | YES | Unique comment id |
-| taskId | string | YES | Linked task |
-| authorId | string | YES | Comment author |
-| content | string | YES | Comment text |
-| createdAt | string | YES | ISO timestamp |
-| editedAt | string | NO | Edit timestamp |
-| deleted | boolean | YES | Soft delete flag |
+| Column    | Type    | Mandatory | Description       |
+| --------- | ------- | --------- | ----------------- |
+| PK        | string  | YES       | Parent task       |
+| SK        | string  | YES       | Sort key          |
+| commentId | string  | YES       | Unique comment id |
+| taskId    | string  | YES       | Linked task       |
+| authorId  | string  | YES       | Comment author    |
+| content   | string  | YES       | Comment text      |
+| createdAt | string  | YES       | ISO timestamp     |
+| editedAt  | string  | NO        | Edit timestamp    |
+| deleted   | boolean | YES       | Soft delete flag  |
 
 ---
 
@@ -403,24 +402,24 @@ Used for:
 
 # Primary Key
 
-| Key | Value |
-|---|---|
-| PK | TASK#<taskId> |
-| SK | AUDIT#<timestamp> |
+| Key | Value             |
+| --- | ----------------- |
+| PK  | TASK#<taskId>     |
+| SK  | AUDIT#<timestamp> |
 
 ---
 
 # Columns
 
-| Column | Type | Mandatory | Description |
-|---|---|---|---|
-| PK | string | YES | Parent task |
-| SK | string | YES | Sort key |
-| action | string | YES | Action name |
-| actorId | string | YES | User who triggered action |
-| oldValue | string | NO | Previous value |
-| newValue | string | NO | Updated value |
-| createdAt | string | YES | ISO timestamp |
+| Column    | Type   | Mandatory | Description               |
+| --------- | ------ | --------- | ------------------------- |
+| PK        | string | YES       | Parent task               |
+| SK        | string | YES       | Sort key                  |
+| action    | string | YES       | Action name               |
+| actorId   | string | YES       | User who triggered action |
+| oldValue  | string | NO        | Previous value            |
+| newValue  | string | NO        | Updated value             |
+| createdAt | string | YES       | ISO timestamp             |
 
 ---
 
@@ -458,11 +457,11 @@ Supports:
 
 ---
 
-| Attribute | Value |
-|---|---|
-| Index Name | TeamIndex |
-| Partition Key | teamId |
-| Sort Key | createdAt |
+| Attribute     | Value     |
+| ------------- | --------- |
+| Index Name    | TeamIndex |
+| Partition Key | teamId    |
+| Sort Key      | createdAt |
 
 ---
 
@@ -485,11 +484,11 @@ Supports:
 
 ---
 
-| Attribute | Value |
-|---|---|
-| Index Name | AssigneeIndex |
-| Partition Key | assigneeId |
-| Sort Key | status#deadline |
+| Attribute     | Value           |
+| ------------- | --------------- |
+| Index Name    | AssigneeIndex   |
+| Partition Key | assigneeId      |
+| Sort Key      | status#deadline |
 
 ---
 
@@ -513,11 +512,11 @@ Supports:
 
 ---
 
-| Attribute | Value |
-|---|---|
-| Index Name | StatusIndex |
-| Partition Key | status |
-| Sort Key | updatedAt |
+| Attribute     | Value       |
+| ------------- | ----------- |
+| Index Name    | StatusIndex |
+| Partition Key | status      |
+| Sort Key      | updatedAt   |
 
 ---
 
@@ -540,11 +539,11 @@ Supports:
 
 ---
 
-| Attribute | Value |
-|---|---|
-| Index Name | DueDateIndex |
-| Partition Key | deadline |
-| Sort Key | assigneeId |
+| Attribute     | Value        |
+| ------------- | ------------ |
+| Index Name    | DueDateIndex |
+| Partition Key | deadline     |
+| Sort Key      | assigneeId   |
 
 ---
 
@@ -558,14 +557,14 @@ Get all tasks due today
 
 # 8. RELATIONSHIPS BETWEEN TABLES
 
-| Source | Relationship | Target |
-|---|---|---|
-| User | belongs to | Team |
-| User | assigned to | Tasks |
-| Task | belongs to | Project |
-| Task | belongs to | Team |
-| Task | has many | Comments |
-| Task | has many | Audit Logs |
+| Source | Relationship | Target     |
+| ------ | ------------ | ---------- |
+| User   | belongs to   | Team       |
+| User   | assigned to  | Tasks      |
+| Task   | belongs to   | Project    |
+| Task   | belongs to   | Team       |
+| Task   | has many     | Comments   |
+| Task   | has many     | Audit Logs |
 
 ---
 
@@ -575,10 +574,10 @@ Get all tasks due today
 
 ```ts
 export enum TaskStatus {
-  TODO = 'TODO',
-  IN_PROGRESS = 'IN_PROGRESS',
-  IN_REVIEW = 'IN_REVIEW',
-  DONE = 'DONE'
+  TODO = "TODO",
+  IN_PROGRESS = "IN_PROGRESS",
+  IN_REVIEW = "IN_REVIEW",
+  DONE = "DONE",
 }
 ```
 
@@ -588,10 +587,10 @@ export enum TaskStatus {
 
 ```ts
 export enum TaskPriority {
-  LOW = 'LOW',
-  MEDIUM = 'MEDIUM',
-  HIGH = 'HIGH',
-  CRITICAL = 'CRITICAL'
+  LOW = "LOW",
+  MEDIUM = "MEDIUM",
+  HIGH = "HIGH",
+  CRITICAL = "CRITICAL",
 }
 ```
 
@@ -601,9 +600,9 @@ export enum TaskPriority {
 
 ```ts
 export enum UserRole {
-  EMPLOYEE = 'EMPLOYEE',
-  MANAGER = 'MANAGER',
-  ADMIN = 'ADMIN'
+  EMPLOYEE = "EMPLOYEE",
+  MANAGER = "MANAGER",
+  ADMIN = "ADMIN",
 }
 ```
 
@@ -614,9 +613,9 @@ export enum UserRole {
 Mandatory backend validation:
 
 ```ts
-if (user.role !== 'MANAGER') {
+if (user.role !== "MANAGER") {
   if (task.teamId !== user.primaryTeamId) {
-    throw ForbiddenException
+    throw ForbiddenException;
   }
 }
 ```
@@ -625,15 +624,15 @@ if (user.role !== 'MANAGER') {
 
 # 10. EXAMPLE ACCESS PATTERNS
 
-| Use Case | Query Method |
-|---|---|
-| Get task by id | PK lookup |
-| Get team tasks | TeamIndex |
-| Get user tasks | AssigneeIndex |
-| Get due tasks | DueDateIndex |
-| Get task comments | PK query on Comments |
+| Use Case               | Query Method              |
+| ---------------------- | ------------------------- |
+| Get task by id         | PK lookup                 |
+| Get team tasks         | TeamIndex                 |
+| Get user tasks         | AssigneeIndex             |
+| Get due tasks          | DueDateIndex              |
+| Get task comments      | PK query on Comments      |
 | Get task audit history | PK query on TaskAuditLogs |
-| Get all done tasks | StatusIndex |
+| Get all done tasks     | StatusIndex               |
 
 ---
 
@@ -656,4 +655,3 @@ if (user.role !== 'MANAGER') {
 This schema is the finalized implementation target for the Mini-Jira AWS project.
 
 All backend services, APIs, Lambda functions, and frontend contracts should align with this document.
-
