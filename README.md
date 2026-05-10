@@ -27,9 +27,14 @@ AWS_ACCESS_KEY_ID=test
 AWS_SECRET_ACCESS_KEY=test
 AWS_REGION=us-east-1
 DYNAMODB_ENDPOINT=http://dynamodb:8000
-TASKS_TABLE=Tasks
+USERS_TABLE=Users
+TEAMS_TABLE=Teams
 PROJECTS_TABLE=Projects
+TASKS_TABLE=Tasks
 COMMENTS_TABLE=Comments
+TASK_AUDIT_LOGS_TABLE=TaskAuditLogs
+LOCALSTACK_ENDPOINT=http://localstack:4566
+
 ```
 
 2. Start the local stack (DynamoDB Local + LocalStack + init script that creates tables):
@@ -58,14 +63,18 @@ Expected output (example):
 
 ```
 ----------------
-|  ListTables  |
-+--------------+
-|| TableNames ||
-|+------------+|
-||  Comments  ||
-||  Projects  ||
-||  Tasks     ||
-|+------------+|
+|    ListTables     |
++-------------------+
+||   TableNames    ||
+|+-----------------+|
+||  Comments       ||
+||  Projects       ||
+||  TaskAuditLogs  ||
+||  Tasks          ||
+||  Teams          ||
+||  Users          ||
+|+-----------------+|
+
 ```
 
 4. Troubleshooting tips
