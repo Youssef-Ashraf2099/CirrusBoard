@@ -42,9 +42,16 @@ docker compose up -d --build
 3. Verify the init script created the tables (readable table output):
 
 ```bash
-docker run --rm --network cirrusboard_default \
-	-e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test -e AWS_REGION=us-east-1 \
-	amazon/aws-cli dynamodb list-tables --endpoint-url http://dynamodb:8000 --region us-east-1 --output table
+docker run --rm \
+  --network cirrusboard_default \
+  -e AWS_ACCESS_KEY_ID=test \
+  -e AWS_SECRET_ACCESS_KEY=test \
+  -e AWS_REGION=us-east-1 \
+  amazon/aws-cli \
+  dynamodb list-tables \
+  --endpoint-url http://dynamodb:8000 \
+  --region us-east-1 \
+  --output table
 ```
 
 Expected output (example):
