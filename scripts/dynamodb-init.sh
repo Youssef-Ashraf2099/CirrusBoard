@@ -1,39 +1,269 @@
 #!/bin/sh
 set -e
 
-echo "Waiting for DynamoDB to be available at ${DYNAMODB_ENDPOINT:-http://dynamodb:8000}..."
+DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT:-http://dynamodb:8000}
+
+echo "Waiting for DynamoDB to become available at ${DYNAMODB_ENDPOINT}..."
+
 attempts=0
-until curl -s ${DYNAMODB_ENDPOINT:-http://dynamodb:8000} >/dev/null 2>&1; do
+until curl -s ${DYNAMODB_ENDPOINT} >/dev/null 2>&1; do
   attempts=$((attempts+1))
+
   if [ $attempts -ge 30 ]; then
-    echo "DynamoDB did not become available after 30s, continuing anyway..."
-    break
+    echo "DynamoDB did not become available after 30 seconds."
+    exit 1
   fi
+
   sleep 1
 done
 
-echo "Creating Tasks table..."
-aws dynamodb create-table --table-name "${TASKS_TABLE}" \
-  --attribute-definitions AttributeName=taskId,AttributeType=S AttributeName=teamId,AttributeType=S AttributeName=assigneeId,AttributeType=S \
-  --key-schema AttributeName=taskId,KeyType=HASH \
+echo "DynamoDB is ready."
+
+########################################################
+# USERS TABLE
+########################################################
+
+echo "Creating Users table..."
+
+aws dynamodb create-table \
+  --table-name "${USERS_TABLE}" \
+  --attribute-definitions \
+      AttributeName=PK,AttributeType=S \
+      AttributeName=email,AttributeType=S \
+  --key-schema \
+      AttributeName=PK,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST \
-  --global-secondary-indexes '[{"IndexName":"teamId-index","KeySchema":[{"AttributeName":"teamId","KeyType":"HASH"}],"Projection":{"ProjectionType":"ALL"}},{"IndexName":"assigneeId-index","KeySchema":[{"AttributeName":"assigneeId","KeyType":"HASH"}],"Projection":{"ProjectionType":"ALL"}}]' \
+  --global-secondary-indexes '[
+    {
+      "IndexName": "EmailIndex",
+      "KeySchema": [
+        {
+          "AttributeName": "email",
+          "KeyType": "HASH"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      }
+    }
+  ]' \
   --endpoint-url "${DYNAMODB_ENDPOINT}" || true
+
+########################################################
+# TEAMS TABLE
+########################################################
+
+echo "Creating Teams table..."
+
+aws dynamodb create-table \
+  --table-name "${TEAMS_TABLE}" \
+  --attribute-definitions \
+      AttributeName=PK,AttributeType=S \
+      AttributeName=name,AttributeType=S \
+  --key-schema \
+      AttributeName=PK,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --global-secondary-indexes '[
+    {
+      "IndexName": "TeamNameIndex",
+      "KeySchema": [
+        {
+          "AttributeName": "name",
+          "KeyType": "HASH"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      }
+    }
+  ]' \
+  --endpoint-url "${DYNAMODB_ENDPOINT}" || true
+
+########################################################
+# PROJECTS TABLE
+########################################################
 
 echo "Creating Projects table..."
-aws dynamodb create-table --table-name "${PROJECTS_TABLE}" \
-  --attribute-definitions AttributeName=projectId,AttributeType=S AttributeName=teamId,AttributeType=S \
-  --key-schema AttributeName=projectId,KeyType=HASH \
+
+aws dynamodb create-table \
+  --table-name "${PROJECTS_TABLE}" \
+  --attribute-definitions \
+      AttributeName=PK,AttributeType=S \
+      AttributeName=status,AttributeType=S \
+  --key-schema \
+      AttributeName=PK,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST \
-  --global-secondary-indexes '[{"IndexName":"teamId-index","KeySchema":[{"AttributeName":"teamId","KeyType":"HASH"}],"Projection":{"ProjectionType":"ALL"}}]' \
+  --global-secondary-indexes '[
+    {
+      "IndexName": "ProjectStatusIndex",
+      "KeySchema": [
+        {
+          "AttributeName": "status",
+          "KeyType": "HASH"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      }
+    }
+  ]' \
   --endpoint-url "${DYNAMODB_ENDPOINT}" || true
+
+########################################################
+# TASKS TABLE
+########################################################
+
+echo "Creating Tasks table..."
+
+aws dynamodb create-table \
+  --table-name "${TASKS_TABLE}" \
+  --attribute-definitions \
+      AttributeName=PK,AttributeType=S \
+      AttributeName=teamId,AttributeType=S \
+      AttributeName=assigneeId,AttributeType=S \
+      AttributeName=status,AttributeType=S \
+      AttributeName=deadline,AttributeType=S \
+      AttributeName=createdAt,AttributeType=S \
+      AttributeName=statusDeadline,AttributeType=S \
+  --key-schema \
+      AttributeName=PK,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --global-secondary-indexes '[
+    {
+      "IndexName": "TeamIndex",
+      "KeySchema": [
+        {
+          "AttributeName": "teamId",
+          "KeyType": "HASH"
+        },
+        {
+          "AttributeName": "createdAt",
+          "KeyType": "RANGE"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      }
+    },
+    {
+      "IndexName": "AssigneeIndex",
+      "KeySchema": [
+        {
+          "AttributeName": "assigneeId",
+          "KeyType": "HASH"
+        },
+        {
+          "AttributeName": "statusDeadline",
+          "KeyType": "RANGE"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      }
+    },
+    {
+      "IndexName": "StatusIndex",
+      "KeySchema": [
+        {
+          "AttributeName": "status",
+          "KeyType": "HASH"
+        },
+        {
+          "AttributeName": "createdAt",
+          "KeyType": "RANGE"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      }
+    },
+    {
+      "IndexName": "DueDateIndex",
+      "KeySchema": [
+        {
+          "AttributeName": "deadline",
+          "KeyType": "HASH"
+        },
+        {
+          "AttributeName": "assigneeId",
+          "KeyType": "RANGE"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      }
+    }
+  ]' \
+  --endpoint-url "${DYNAMODB_ENDPOINT}" || true
+
+########################################################
+# COMMENTS TABLE
+########################################################
 
 echo "Creating Comments table..."
-aws dynamodb create-table --table-name "${COMMENTS_TABLE}" \
-  --attribute-definitions AttributeName=commentId,AttributeType=S AttributeName=taskId,AttributeType=S \
-  --key-schema AttributeName=commentId,KeyType=HASH \
+
+aws dynamodb create-table \
+  --table-name "${COMMENTS_TABLE}" \
+  --attribute-definitions \
+      AttributeName=PK,AttributeType=S \
+      AttributeName=SK,AttributeType=S \
+      AttributeName=authorId,AttributeType=S \
+  --key-schema \
+      AttributeName=PK,KeyType=HASH \
+      AttributeName=SK,KeyType=RANGE \
   --billing-mode PAY_PER_REQUEST \
-  --global-secondary-indexes '[{"IndexName":"taskId-index","KeySchema":[{"AttributeName":"taskId","KeyType":"HASH"}],"Projection":{"ProjectionType":"ALL"}}]' \
+  --global-secondary-indexes '[
+    {
+      "IndexName": "AuthorIndex",
+      "KeySchema": [
+        {
+          "AttributeName": "authorId",
+          "KeyType": "HASH"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      }
+    }
+  ]' \
   --endpoint-url "${DYNAMODB_ENDPOINT}" || true
 
-echo "DynamoDB init complete."
+########################################################
+# TASK AUDIT LOGS TABLE
+########################################################
+
+echo "Creating TaskAuditLogs table..."
+
+aws dynamodb create-table \
+  --table-name "${TASK_AUDIT_LOGS_TABLE}" \
+  --attribute-definitions \
+      AttributeName=PK,AttributeType=S \
+      AttributeName=SK,AttributeType=S \
+      AttributeName=actorId,AttributeType=S \
+  --key-schema \
+      AttributeName=PK,KeyType=HASH \
+      AttributeName=SK,KeyType=RANGE \
+  --billing-mode PAY_PER_REQUEST \
+  --global-secondary-indexes '[
+    {
+      "IndexName": "ActorIndex",
+      "KeySchema": [
+        {
+          "AttributeName": "actorId",
+          "KeyType": "HASH"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      }
+    }
+  ]' \
+  --endpoint-url "${DYNAMODB_ENDPOINT}" || true
+
+########################################################
+# DONE
+########################################################
+
+echo "========================================="
+echo "DynamoDB initialization completed."
+echo "========================================="
