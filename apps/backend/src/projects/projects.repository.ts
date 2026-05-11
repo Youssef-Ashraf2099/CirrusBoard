@@ -7,7 +7,7 @@ import {
   DeleteCommand,
   QueryCommand,
 } from "@aws-sdk/lib-dynamodb";
-import { ProjectItem } from "./projects.types";
+import { ProjectItem } from "./projects.model";
 
 @Injectable()
 export class ProjectsRepository {
@@ -17,15 +17,31 @@ export class ProjectsRepository {
   ) {}
 
   async createProject(project: ProjectItem): Promise<ProjectItem> {
+    const now = new Date().toISOString();
+    const id = project.projectId ?? Math.random().toString(36).slice(2);
+    const pk = `PROJECT#${id}`;
+    const item: ProjectItem = {
+      PK: pk,
+      projectId: id,
+      title: project.title ?? project.name,
+      description: project.description,
+      status: project.status ?? "ACTIVE",
+      createdBy: project.createdBy,
+      teamId: project.teamId,
+      createdAt: project.createdAt ?? now,
+      updatedAt: now,
+    } as ProjectItem;
+
     await this.client.send(
-      new PutCommand({ TableName: this.tableName, Item: project }) as any,
+      new PutCommand({ TableName: this.tableName, Item: item }) as any,
     );
-    return project;
+    return item;
   }
 
   async getProjectById(projectId: string): Promise<ProjectItem | null> {
+    const pk = `PROJECT#${projectId}`;
     const res = await this.client.send(
-      new GetCommand({ TableName: this.tableName, Key: { projectId } }) as any,
+      new GetCommand({ TableName: this.tableName, Key: { PK: pk } }) as any,
     );
     return (res as any).Item ?? null;
   }
@@ -34,11 +50,25 @@ export class ProjectsRepository {
     projectId: string,
     updates: Partial<ProjectItem>,
   ): Promise<ProjectItem> {
+    // sanitize updates: never allow PK or projectId to be updated
+    const now = new Date().toISOString();
+    const pk = `PROJECT#${projectId}`;
+
+    const sanitized: Record<string, any> = {
+      ...(updates as Record<string, any>),
+    };
+    delete sanitized.PK;
+    delete sanitized.projectId;
+
+    // always update updatedAt
+    sanitized.updatedAt = now;
+
     const ExpressionAttributeNames: Record<string, string> = {};
     const ExpressionAttributeValues: Record<string, any> = {};
     const setParts: string[] = [];
     let idx = 0;
-    for (const [k, v] of Object.entries(updates)) {
+
+    for (const [k, v] of Object.entries(sanitized)) {
       idx += 1;
       const nameKey = `#k${idx}`;
       const valKey = `:v${idx}`;
@@ -46,13 +76,17 @@ export class ProjectsRepository {
       ExpressionAttributeValues[valKey] = v;
       setParts.push(`${nameKey} = ${valKey}`);
     }
-    const UpdateExpression = setParts.length
-      ? `SET ${setParts.join(", ")}`
-      : undefined;
+
+    if (setParts.length === 0) {
+      throw new Error("No updatable fields provided");
+    }
+
+    const UpdateExpression = `SET ${setParts.join(", ")}`;
+
     const res = await this.client.send(
       new UpdateCommand({
         TableName: this.tableName,
-        Key: { projectId },
+        Key: { PK: pk },
         UpdateExpression,
         ExpressionAttributeNames: Object.keys(ExpressionAttributeNames).length
           ? ExpressionAttributeNames
@@ -67,11 +101,9 @@ export class ProjectsRepository {
   }
 
   async deleteProject(projectId: string): Promise<void> {
+    const pk = `PROJECT#${projectId}`;
     await this.client.send(
-      new DeleteCommand({
-        TableName: this.tableName,
-        Key: { projectId },
-      }) as any,
+      new DeleteCommand({ TableName: this.tableName, Key: { PK: pk } }) as any,
     );
   }
 

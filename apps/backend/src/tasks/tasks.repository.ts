@@ -1,4 +1,5 @@
 import { Injectable, Inject } from "@nestjs/common";
+import { randomUUID } from "crypto";
 import {
   DynamoDBDocumentClient,
   PutCommand,
@@ -7,7 +8,7 @@ import {
   DeleteCommand,
   QueryCommand,
 } from "@aws-sdk/lib-dynamodb";
-import { TaskItem } from "./tasks.types";
+import { TaskItem } from "./tasks.model";
 
 @Injectable()
 export class TasksRepository {
@@ -17,13 +18,39 @@ export class TasksRepository {
   ) {}
 
   async createTask(task: TaskItem): Promise<TaskItem> {
-    const cmd = new PutCommand({ TableName: this.tableName, Item: task });
-    await this.client.send(cmd as any);
-    return task;
+    const now = new Date().toISOString();
+    const id = task.taskId ?? randomUUID();
+    const pk = `TASK#${id}`;
+
+    const item: TaskItem = {
+      PK: pk,
+      taskId: id,
+      projectId: task.projectId,
+      teamId: task.teamId,
+      assigneeId: task.assigneeId,
+      title: task.title,
+      description: task.description,
+      status: task.status ?? "TODO",
+      priority: task.priority ?? "MEDIUM",
+      deadline: task.deadline ?? now.split("T")[0],
+      createdBy: task.createdBy,
+      createdAt: task.createdAt ?? now,
+      updatedAt: now,
+      deleted: task.deleted ?? false,
+      latestThumbnailUrl: task.latestThumbnailUrl,
+      attachments: task.attachments,
+      statusDeadline: `${task.status ?? "TODO"}#${task.deadline ?? now.split("T")[0]}`,
+    } as TaskItem;
+
+    await this.client.send(
+      new PutCommand({ TableName: this.tableName, Item: item }) as any,
+    );
+    return item;
   }
 
   async getTaskById(taskId: string): Promise<TaskItem | null> {
-    const cmd = new GetCommand({ TableName: this.tableName, Key: { taskId } });
+    const pk = `TASK#${taskId}`;
+    const cmd = new GetCommand({ TableName: this.tableName, Key: { PK: pk } });
     const res = await this.client.send(cmd as any);
     return (res as any).Item ?? null;
   }
@@ -50,9 +77,24 @@ export class TasksRepository {
       ? `SET ${setParts.join(", ")}`
       : undefined;
 
+    // ensure statusDeadline is updated when status/deadline change
+    if (updates.status || updates.deadline) {
+      const status = updates.status ?? "TODO";
+      const deadline =
+        updates.deadline ?? new Date().toISOString().split("T")[0];
+      idx += 1;
+      const sdName = `#k${idx}`;
+      const sdVal = `:v${idx}`;
+      ExpressionAttributeNames[sdName] = "statusDeadline";
+      ExpressionAttributeValues[sdVal] = `${status}#${deadline}`;
+      setParts.push(`${sdName} = ${sdVal}`);
+    }
+
+    const pk = `TASK#${taskId}`;
+
     const cmd = new UpdateCommand({
       TableName: this.tableName,
-      Key: { taskId },
+      Key: { PK: pk },
       UpdateExpression,
       ExpressionAttributeNames: Object.keys(ExpressionAttributeNames).length
         ? ExpressionAttributeNames
@@ -61,15 +103,16 @@ export class TasksRepository {
         ? ExpressionAttributeValues
         : undefined,
       ReturnValues: "ALL_NEW",
-    });
-    const res = await this.client.send(cmd as any);
+    }) as any;
+    const res = await this.client.send(cmd);
     return (res as any).Attributes as TaskItem;
   }
 
   async deleteTask(taskId: string): Promise<void> {
+    const pk = `TASK#${taskId}`;
     const cmd = new DeleteCommand({
       TableName: this.tableName,
-      Key: { taskId },
+      Key: { PK: pk },
     });
     await this.client.send(cmd as any);
   }
