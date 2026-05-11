@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { CommentsRepository } from "./comments.repository";
-import { CommentItem } from "./comments.types";
+import { CommentItem } from "./comments.model";
 import { v4 as uuidv4 } from "uuid";
 
 @Injectable()
@@ -13,7 +13,7 @@ export class CommentsService {
     content: string,
   ): Promise<CommentItem> {
     const now = new Date().toISOString();
-    const comment: CommentItem = {
+    const comment: Partial<CommentItem> = {
       commentId: uuidv4(),
       authorId,
       taskId,

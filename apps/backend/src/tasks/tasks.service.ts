@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { TasksRepository } from "./tasks.repository";
-import { TaskItem, UserPrincipal } from "./tasks.types";
+import { TaskItem, UserPrincipal } from "./tasks.model";
 import { v4 as uuidv4 } from "uuid";
 
 @Injectable()
@@ -19,20 +19,20 @@ export class TasksService {
       throw new ForbiddenException("Only managers may create tasks");
     }
     const now = new Date().toISOString();
-    const task: TaskItem = {
+    const task: Partial<TaskItem> = {
       taskId: uuidv4(),
       title: input.title ?? "Untitled",
       description: input.description,
-      status: input.status ?? "To Do",
-      priority: input.priority ?? "Medium",
-      deadline: input.deadline,
+      status: (input.status as any) ?? "TODO",
+      priority: (input.priority as any) ?? "MEDIUM",
+      deadline: input.deadline ?? now.split("T")[0],
       assigneeId: input.assigneeId,
       teamId: input.teamId!,
       attachments: input.attachments ?? [],
       createdAt: now,
       updatedAt: now,
     };
-    return this.repo.createTask(task);
+    return this.repo.createTask(task as any);
   }
 
   async getTask(actor: UserPrincipal, taskId: string): Promise<TaskItem> {

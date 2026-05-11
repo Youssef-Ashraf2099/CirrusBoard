@@ -4,9 +4,9 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { ProjectsRepository } from "./projects.repository";
-import { ProjectItem } from "./projects.types";
+import { ProjectItem } from "./projects.model";
 import { v4 as uuidv4 } from "uuid";
-import { UserPrincipal } from "../tasks/tasks.types";
+import { UserPrincipal } from "../tasks/tasks.model";
 
 @Injectable()
 export class ProjectsService {
@@ -19,11 +19,14 @@ export class ProjectsService {
     if (actor.role !== "Manager")
       throw new ForbiddenException("Only managers may create projects");
     const now = new Date().toISOString();
+    const id = uuidv4();
     const project: ProjectItem = {
-      projectId: uuidv4(),
-      name: input.name ?? "Untitled",
+      PK: `PROJECT#${id}`,
+      projectId: id,
+      name: input.name ?? input.title ?? "Untitled",
+      title: input.name ?? input.title ?? "Untitled",
       description: input.description,
-      ownerId: actor.userId,
+      createdBy: actor.userId,
       teamId: input.teamId,
       createdAt: now,
       updatedAt: now,
