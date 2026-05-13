@@ -1,10 +1,3 @@
-export type Role = "Manager" | "Employee";
-
-export interface UserPrincipal {
-  userId: string;
-  role: Role;
-  teamId?: string;
-}
 
 export interface Attachment {
   attachmentId: string;
