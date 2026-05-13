@@ -24,6 +24,25 @@ export class CommentsService {
   }
 
   async getCommentsForTask(taskId: string) {
-    return this.repo.queryCommentsByTask(taskId);
+    const comments = await this.repo.queryCommentsByTask(taskId);
+    return comments.filter(c => !c.deleted);
+  }
+
+  async updateComment(taskId: string, commentId: string, content: string): Promise<CommentItem> {
+    try {
+      return await this.repo.updateComment(taskId, commentId, content);
+    } catch (e: any) {
+      if (e.message === "Comment not found") throw new NotFoundException(e.message);
+      throw e;
+    }
+  }
+
+  async deleteComment(taskId: string, commentId: string): Promise<void> {
+    try {
+      await this.repo.deleteComment(taskId, commentId);
+    } catch (e: any) {
+      if (e.message === "Comment not found") throw new NotFoundException(e.message);
+      throw e;
+    }
   }
 }
