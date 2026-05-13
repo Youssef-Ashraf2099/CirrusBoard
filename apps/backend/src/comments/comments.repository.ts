@@ -4,7 +4,7 @@ import {
   PutCommand,
   QueryCommand,
 } from "@aws-sdk/lib-dynamodb";
-import { CommentItem } from "./comments.types";
+import { CommentItem } from "./comments.model";
 
 @Injectable()
 export class CommentsRepository {
@@ -13,24 +13,42 @@ export class CommentsRepository {
     @Inject("COMMENTS_TABLE") private readonly tableName: string,
   ) {}
 
-  async createComment(comment: CommentItem): Promise<CommentItem> {
+  async createComment(comment: Partial<CommentItem>): Promise<CommentItem> {
+    const now = new Date().toISOString();
+    const id = comment.commentId ?? (Math.random() + "").slice(2);
+    const pk = `TASK#${comment.taskId}`;
+    const sk = `COMMENT#${now}#${id}`;
+    const item: CommentItem = {
+      PK: pk,
+      SK: sk,
+      commentId: id,
+      taskId: comment.taskId,
+      authorId: comment.authorId,
+      content: comment.content,
+      createdAt: now,
+      editedAt: comment.editedAt,
+      deleted: comment.deleted ?? false,
+    } as CommentItem;
+
     await this.client.send(
-      new PutCommand({ TableName: this.tableName, Item: comment }) as any,
+      new PutCommand({ TableName: this.tableName, Item: item }) as any,
     );
-    return comment;
+    return item;
   }
 
   async queryCommentsByTask(
     taskId: string,
     indexName = "taskId-index",
   ): Promise<CommentItem[]> {
+    // Primary access pattern: query by PK = TASK#<taskId> and SK begins_with COMMENT#
+    const pk = `TASK#${taskId}`;
     const res = await this.client.send(
       new QueryCommand({
         TableName: this.tableName,
-        IndexName: indexName,
-        KeyConditionExpression: "#taskId = :taskId",
-        ExpressionAttributeNames: { "#taskId": "taskId" },
-        ExpressionAttributeValues: { ":taskId": taskId },
+        KeyConditionExpression:
+          "#PK = :PK AND begins_with(#SK, :commentPrefix)",
+        ExpressionAttributeNames: { "#PK": "PK", "#SK": "SK" },
+        ExpressionAttributeValues: { ":PK": pk, ":commentPrefix": "COMMENT#" },
       }) as any,
     );
     return (res as any).Items ?? [];

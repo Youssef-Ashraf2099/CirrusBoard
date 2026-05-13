@@ -1,6 +1,6 @@
 import { TasksRepository } from "../tasks.repository";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { TaskItem } from "../tasks.types";
+import { TaskItem } from "../tasks.model";
 
 describe("TasksRepository", () => {
   let repo: TasksRepository;
@@ -14,9 +14,13 @@ describe("TasksRepository", () => {
 
   it("creates and returns a task", async () => {
     const task: TaskItem = {
+      PK: "TASK#1",
       taskId: "1",
+      projectId: "PROJECT#p1",
       title: "T",
-      status: "To Do",
+      status: "TODO",
+      priority: "MEDIUM",
+      deadline: "2026-01-01",
       teamId: "team-a",
     } as TaskItem;
     mockClient.send.mockResolvedValue({});
@@ -27,7 +31,13 @@ describe("TasksRepository", () => {
 
   it("gets task by id", async () => {
     mockClient.send.mockResolvedValue({
-      Item: { taskId: "1", title: "T", status: "To Do", teamId: "team-a" },
+      Item: {
+        PK: "TASK#1",
+        taskId: "1",
+        title: "T",
+        status: "TODO",
+        teamId: "team-a",
+      },
     });
     const res = await repo.getTaskById("1");
     expect(res).toBeTruthy();
@@ -36,10 +46,12 @@ describe("TasksRepository", () => {
 
   it("updates task and returns new attributes", async () => {
     mockClient.send.mockResolvedValue({
-      Attributes: { taskId: "1", status: "In Progress" },
+      Attributes: { PK: "TASK#1", taskId: "1", status: "IN_PROGRESS" },
     });
-    const updated = await repo.updateTask("1", { status: "In Progress" });
-    expect(updated.status).toBe("In Progress");
+    const updated = await repo.updateTask("1", {
+      status: "IN_PROGRESS",
+    } as any);
+    expect(updated.status).toBe("IN_PROGRESS");
   });
 
   it("deletes task", async () => {
