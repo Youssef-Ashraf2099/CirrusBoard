@@ -4,7 +4,8 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { TasksRepository } from "./tasks.repository";
-import { TaskItem, UserPrincipal } from "./tasks.model";
+import { TaskItem } from "./tasks.model";
+import { UserItem } from "../users/users.model";
 import { v4 as uuidv4 } from "uuid";
 import { CreateTaskDto } from "./dto/create-task.dto";
 import { UpdateTaskDto } from "./dto/update-task.dto";
@@ -14,10 +15,10 @@ export class TasksService {
   constructor(private readonly repo: TasksRepository) {}
 
   async createTask(
-    actor: UserPrincipal,
+    actor: UserItem,
    input: CreateTaskDto,
   ): Promise<TaskItem> {
-    if (actor.role !== "Manager") {
+    if (actor.role !== "MANAGER") {
       throw new ForbiddenException("Only managers may create tasks");
     }
     const now = new Date().toISOString();
@@ -37,24 +38,24 @@ export class TasksService {
     return this.repo.createTask(task as any);
   }
 
-  async getTask(actor: UserPrincipal, taskId: string): Promise<TaskItem> {
+  async getTask(actor: UserItem, taskId: string): Promise<TaskItem> {
     const task = await this.repo.getTaskById(taskId);
     if (!task) throw new NotFoundException("Task not found");
-    if (actor.role !== "Manager" && actor.teamId !== task.teamId) {
+    if (actor.role !== "MANAGER" && actor.primaryTeamId !== task.teamId) {
       throw new ForbiddenException("Access denied to this task");
     }
     return task;
   }
 
   async updateStatus(
-    actor: UserPrincipal,
+    actor: UserItem,
     taskId: string,
     status: TaskItem["status"],
   ): Promise<TaskItem> {
     const task = await this.repo.getTaskById(taskId);
     if (!task) throw new NotFoundException("Task not found");
     // Employees can only update tasks assigned to them
-    if (actor.role === "Employee") {
+    if (actor.role === "EMPLOYEE") {
       if (actor.userId !== task.assigneeId)
         throw new ForbiddenException("Not assigned to you");
     }
@@ -66,11 +67,11 @@ export class TasksService {
     return updated;
   }
   async assignTask(
-    actor: UserPrincipal,
+    actor: UserItem,
     taskId: string,
     assigneeId: string,
   ): Promise<TaskItem> {
-    if (actor.role !== "Manager") {
+    if (actor.role !== "MANAGER") {
       throw new ForbiddenException(
         "Only managers can assign tasks",
       );
@@ -90,20 +91,20 @@ export class TasksService {
     return updated;
   }
 
-  async deleteTask(actor: UserPrincipal, taskId: string): Promise<void> {
+  async deleteTask(actor: UserItem, taskId: string): Promise<void> {
     const task = await this.repo.getTaskById(taskId);
     if (!task) throw new NotFoundException("Task not found");
-    if (actor.role !== "Manager" && actor.teamId !== task.teamId) {
+    if (actor.role !== "MANAGER" && actor.primaryTeamId !== task.teamId) {
       throw new ForbiddenException("Access denied");
     }
     await this.repo.deleteTask(taskId);
   }
 
   async listTasksForTeam(
-    actor: UserPrincipal,
+    actor: UserItem,
     teamId: string,
   ): Promise<TaskItem[]> {
-    if (actor.role !== "Manager" && actor.teamId !== teamId) {
+    if (actor.role !== "MANAGER" && actor.primaryTeamId !== teamId) {
       throw new ForbiddenException("Access denied to team tasks");
     }
     return this.repo.queryTasksByTeamId(teamId);

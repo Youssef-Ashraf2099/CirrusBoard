@@ -1,3 +1,5 @@
+import { Attachment } from '../tasks.model';
+
 export class CreateTaskDto {
     title: string;
   
@@ -12,6 +14,6 @@ export class CreateTaskDto {
     teamId: string;
   
     status?: string;
-    
 
+    attachments?: Attachment[];
   }
