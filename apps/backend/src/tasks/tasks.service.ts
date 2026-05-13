@@ -6,6 +6,8 @@ import {
 import { TasksRepository } from "./tasks.repository";
 import { TaskItem, UserPrincipal } from "./tasks.types";
 import { v4 as uuidv4 } from "uuid";
+import { CreateTaskDto } from "./dto/create-task.dto";
+import { UpdateTaskDto } from "./dto/update-task.dto";
 
 @Injectable()
 export class TasksService {
@@ -13,7 +15,7 @@ export class TasksService {
 
   async createTask(
     actor: UserPrincipal,
-    input: Partial<TaskItem>,
+   input: CreateTaskDto,
   ): Promise<TaskItem> {
     if (actor.role !== "Manager") {
       throw new ForbiddenException("Only managers may create tasks");
@@ -61,6 +63,30 @@ export class TasksService {
       updatedAt: new Date().toISOString(),
     };
     const updated = await this.repo.updateTask(taskId, updates);
+    return updated;
+  }
+  async assignTask(
+    actor: UserPrincipal,
+    taskId: string,
+    assigneeId: string,
+  ): Promise<TaskItem> {
+    if (actor.role !== "Manager") {
+      throw new ForbiddenException(
+        "Only managers can assign tasks",
+      );
+    }
+  
+    const task = await this.repo.getTaskById(taskId);
+  
+    if (!task) {
+      throw new NotFoundException("Task not found");
+    }
+  
+    const updated = await this.repo.updateTask(taskId, {
+      assigneeId,
+      updatedAt: new Date().toISOString(),
+    });
+  
     return updated;
   }
 
