@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ProjectsService } from "./projects.service";
+import { ProjectsController } from "./projects.controller";
 import { ProjectsRepository } from "./projects.repository";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
@@ -21,6 +22,7 @@ const tableNameProvider = {
 };
 
 @Module({
+  controllers: [ProjectsController],
   providers: [
     dynamoClientProvider,
     tableNameProvider,
@@ -29,4 +31,4 @@ const tableNameProvider = {
   ],
   exports: [ProjectsService],
 })
-export class ProjectsModule {}
+export class ProjectsModule { }

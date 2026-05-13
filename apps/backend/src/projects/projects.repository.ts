@@ -14,7 +14,7 @@ export class ProjectsRepository {
   constructor(
     @Inject("DYNAMO_CLIENT") private readonly client: DynamoDBDocumentClient,
     @Inject("PROJECTS_TABLE") private readonly tableName: string,
-  ) {}
+  ) { }
 
   async createProject(project: ProjectItem): Promise<ProjectItem> {
     const now = new Date().toISOString();
@@ -23,7 +23,7 @@ export class ProjectsRepository {
     const item: ProjectItem = {
       PK: pk,
       projectId: id,
-      title: project.title ?? project.name,
+      name: project.name,
       description: project.description,
       status: project.status ?? "ACTIVE",
       createdBy: project.createdBy,

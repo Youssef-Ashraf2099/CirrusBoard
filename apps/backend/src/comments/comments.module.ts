@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { CommentsService } from "./comments.service";
+import { CommentsController } from "./comments.controller";
 import { CommentsRepository } from "./comments.repository";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
@@ -21,6 +22,7 @@ const tableNameProvider = {
 };
 
 @Module({
+  controllers: [CommentsController],
   providers: [
     dynamoClientProvider,
     tableNameProvider,
