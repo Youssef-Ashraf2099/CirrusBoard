@@ -3,17 +3,12 @@ import { TasksService } from "./tasks.service";
 import { TasksController } from "./tasks.controller";
 import { TasksRepository } from "./tasks.repository";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { createSharedDynamoDBClient } from "../common/dynamo-client.factory";
 
 const dynamoClientProvider = {
   provide: "DYNAMO_CLIENT",
-  useFactory: () => {
-    const client = new DynamoDBClient({
-      region: process.env.AWS_REGION || "us-east-1",
-      endpoint: process.env.DYNAMODB_ENDPOINT,
-    });
-    return DynamoDBDocumentClient.from(client);
-  },
+  useFactory: () =>
+    DynamoDBDocumentClient.from(createSharedDynamoDBClient()),
 };
 
 const tableNameProvider = {

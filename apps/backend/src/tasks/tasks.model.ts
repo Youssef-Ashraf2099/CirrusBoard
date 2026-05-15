@@ -5,6 +5,12 @@ export interface Attachment {
   thumbnailKey?: string;
   uploadedAt: string;
   version?: number;
+  /** Optional UI metadata (matches richer frontend attachment shape) */
+  name?: string;
+  url?: string;
+  mimeType?: string;
+  size?: number;
+  uploadedBy?: string;
 }
 
 export interface TaskItem {
@@ -24,6 +30,7 @@ export interface TaskItem {
   deleted?: boolean;
   latestThumbnailUrl?: string;
   attachments?: Attachment[];
+  tags?: string[];
   // helper attribute for GSIs
   statusDeadline?: string; // <STATUS>#<DEADLINE>
 }

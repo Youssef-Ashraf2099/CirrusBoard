@@ -24,6 +24,12 @@ export class ProjectsController {
     return this.projectsService.createProject(DummyUser, createProjectDto);
   }
 
+  @Get('team/:teamId')
+  @ApiOperation({ summary: 'List projects for a team' })
+  listForTeam(@Param('teamId') teamId: string) {
+    return this.projectsService.listProjectsForTeam(DummyUser, teamId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a project by ID' })
   findOne(@Param('id') id: string) {

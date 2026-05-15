@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/commo
 import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { UpdateTaskDto } from './dto/update-task.dto';
 import { UserItem } from '../users/users.model';
 import { TaskItem } from './tasks.model';
 
@@ -24,6 +25,12 @@ export class TasksController {
     return this.tasksService.createTask(DummyUser, createTaskDto);
   }
 
+  @Get('team/:teamId')
+  @ApiOperation({ summary: 'List tasks for a team' })
+  listForTeam(@Param('teamId') teamId: string) {
+    return this.tasksService.listTasksForTeam(DummyUser, teamId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a task by ID' })
   findOne(@Param('id') id: string) {
@@ -44,15 +51,15 @@ export class TasksController {
     return this.tasksService.assignTask(DummyUser, id, assigneeId);
   }
 
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update task fields' })
+  update(@Param('id') id: string, @Body() dto: UpdateTaskDto) {
+    return this.tasksService.updateTask(DummyUser, id, dto);
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a task' })
   remove(@Param('id') id: string) {
     return this.tasksService.deleteTask(DummyUser, id);
-  }
-
-  @Get('team/:teamId')
-  @ApiOperation({ summary: 'List tasks for a team' })
-  listForTeam(@Param('teamId') teamId: string) {
-    return this.tasksService.listTasksForTeam(DummyUser, teamId);
   }
 }
