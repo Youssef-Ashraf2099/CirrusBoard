@@ -19,10 +19,16 @@ export class CreateTaskDto {
   
     @ApiProperty()
     teamId: string;
+
+    @ApiProperty()
+    projectId: string;
   
     @ApiProperty({ required: false })
     status?: string;
 
     @ApiProperty({ required: false })
     attachments?: Attachment[];
+
+    @ApiProperty({ required: false, type: [String] })
+    tags?: string[];
   }

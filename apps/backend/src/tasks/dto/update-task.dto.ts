@@ -18,4 +18,7 @@ export class UpdateTaskDto {
   
     @ApiProperty({ required: false })
     status?: string;
+
+    @ApiProperty({ required: false, type: [String] })
+    tags?: string[];
   }

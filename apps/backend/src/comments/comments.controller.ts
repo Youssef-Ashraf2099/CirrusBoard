@@ -12,7 +12,7 @@ export class CommentsController {
   @Post()
   @ApiOperation({ summary: 'Add a new comment' })
   create(@Body() createCommentDto: CreateCommentDto) {
-    const authorId = 'dummy'; // Using dummy user ID
+    const authorId = createCommentDto.authorId ?? 'dummy';
     return this.commentsService.addComment(authorId, createCommentDto.taskId, createCommentDto.content);
   }
 

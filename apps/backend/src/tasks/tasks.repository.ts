@@ -39,6 +39,7 @@ export class TasksRepository {
       deleted: task.deleted ?? false,
       latestThumbnailUrl: task.latestThumbnailUrl,
       attachments: task.attachments,
+      tags: task.tags ?? [],
       statusDeadline: `${task.status ?? "TODO"}#${task.deadline ?? now.split("T")[0]}`,
     } as TaskItem;
 
@@ -65,6 +66,7 @@ export class TasksRepository {
     const setParts: string[] = [];
     let idx = 0;
     for (const [k, v] of Object.entries(updates)) {
+      if (v === undefined) continue;
       idx += 1;
       const nameKey = `#k${idx}`;
       const valKey = `:v${idx}`;
@@ -76,19 +78,6 @@ export class TasksRepository {
     const UpdateExpression = setParts.length
       ? `SET ${setParts.join(", ")}`
       : undefined;
-
-    // ensure statusDeadline is updated when status/deadline change
-    if (updates.status || updates.deadline) {
-      const status = updates.status ?? "TODO";
-      const deadline =
-        updates.deadline ?? new Date().toISOString().split("T")[0];
-      idx += 1;
-      const sdName = `#k${idx}`;
-      const sdVal = `:v${idx}`;
-      ExpressionAttributeNames[sdName] = "statusDeadline";
-      ExpressionAttributeValues[sdVal] = `${status}#${deadline}`;
-      setParts.push(`${sdName} = ${sdVal}`);
-    }
 
     const pk = `TASK#${taskId}`;
 
