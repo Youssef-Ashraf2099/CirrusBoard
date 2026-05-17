@@ -2,6 +2,10 @@ export interface Attachment {
   attachmentId: string;
   originalKey: string;
   thumbnailKey?: string;
+  contentType?: string;
+  size?: number;
+  filename?: string;
+  path?: string;
   uploadedAt: string;
   version?: number;
 }
@@ -25,6 +29,4 @@ export interface TaskItem {
   attachments?: Attachment[];
   // helper attribute for GSIs
   statusDeadline?: string; // <STATUS>#<DEADLINE>
-
-  
 }
