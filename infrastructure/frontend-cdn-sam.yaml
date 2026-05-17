@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: "CirrusBoard - CloudFront CDN for Next.js frontend"
+
+Parameters:
+  OriginDomainName:
+    Type: String
+    Description: "Origin DNS name (e.g., ALB DNS or EC2 public DNS)"
+  OriginProtocolPolicy:
+    Type: String
+    Default: http-only
+    AllowedValues:
+      - http-only
+      - https-only
+      - match-viewer
+  ViewerProtocolPolicy:
+    Type: String
+    Default: allow-all
+    AllowedValues:
+      - allow-all
+      - redirect-to-https
+      - https-only
+  PriceClass:
+    Type: String
+    Default: PriceClass_100
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+
+Resources:
+  DefaultCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: cirrusboard-frontend-default
+        DefaultTTL: 3600
+        MaxTTL: 86400
+        MinTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: all
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+
+  ApiCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: cirrusboard-frontend-api
+        DefaultTTL: 0
+        MaxTTL: 0
+        MinTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: all
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - Authorization
+          QueryStringsConfig:
+            QueryStringBehavior: all
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+
+  ApiOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Name: cirrusboard-frontend-api
+        CookiesConfig:
+          CookieBehavior: all
+        HeadersConfig:
+          HeaderBehavior: whitelist
+          Headers:
+            - Authorization
+        QueryStringsConfig:
+          QueryStringBehavior: all
+
+  FrontendDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        HttpVersion: http2
+        PriceClass: !Ref PriceClass
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+        Origins:
+          - Id: frontend-origin
+            DomainName: !Ref OriginDomainName
+            CustomOriginConfig:
+              OriginProtocolPolicy: !Ref OriginProtocolPolicy
+              OriginSSLProtocols:
+                - TLSv1.2
+        DefaultCacheBehavior:
+          TargetOriginId: frontend-origin
+          ViewerProtocolPolicy: !Ref ViewerProtocolPolicy
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          CachePolicyId: !Ref DefaultCachePolicy
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: frontend-origin
+            ViewerProtocolPolicy: !Ref ViewerProtocolPolicy
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+              - PUT
+              - POST
+              - PATCH
+              - DELETE
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: true
+            CachePolicyId: !Ref ApiCachePolicy
+            OriginRequestPolicyId: !Ref ApiOriginRequestPolicy
+
+Outputs:
+  FrontendDistributionId:
+    Value: !Ref FrontendDistribution
+  FrontendDistributionDomainName:
+    Value: !GetAtt FrontendDistribution.DomainName
+  FrontendOriginDomainName:
+    Value: !Ref OriginDomainName
