@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { TasksService } from "./tasks.service";
+import { TasksController } from "./tasks.controller";
 import { TasksRepository } from "./tasks.repository";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
@@ -21,6 +22,7 @@ const tableNameProvider = {
 };
 
 @Module({
+  controllers: [TasksController],
   providers: [
     dynamoClientProvider,
     tableNameProvider,
