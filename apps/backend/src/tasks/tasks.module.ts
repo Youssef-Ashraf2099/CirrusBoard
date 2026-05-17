@@ -4,6 +4,8 @@ import { TasksController } from "./tasks.controller";
 import { TasksRepository } from "./tasks.repository";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { S3Module } from "../integrations/s3/s3.module";
+import { LambdaModule } from "../integrations/lambda/lambda.module";
 
 const dynamoClientProvider = {
   provide: "DYNAMO_CLIENT",
@@ -22,6 +24,7 @@ const tableNameProvider = {
 };
 
 @Module({
+  imports: [S3Module, LambdaModule],
   controllers: [TasksController],
   providers: [
     dynamoClientProvider,

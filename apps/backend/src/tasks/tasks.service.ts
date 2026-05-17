@@ -1,18 +1,20 @@
-import {
-  Injectable,
-  ForbiddenException,
-  NotFoundException,
-} from "@nestjs/common";
+import { Injectable, ForbiddenException, NotFoundException } from "@nestjs/common";
 import { TasksRepository } from "./tasks.repository";
 import { TaskItem } from "./tasks.model";
 import { UserItem } from "../users/users.model";
 import { v4 as uuidv4 } from "uuid";
 import { CreateTaskDto } from "./dto/create-task.dto";
 import { UpdateTaskDto } from "./dto/update-task.dto";
+import { S3Service } from "../integrations/s3/s3.service";
+import { LambdaService } from "../integrations/lambda/lambda.service";
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly repo: TasksRepository) {}
+  constructor(
+    private readonly repo: TasksRepository,
+    private readonly s3?: S3Service,
+    private readonly lambda?: LambdaService,
+  ) {}
 
   async createTask(
     actor: UserItem,
@@ -108,5 +110,29 @@ export class TasksService {
       throw new ForbiddenException("Access denied to team tasks");
     }
     return this.repo.queryTasksByTeamId(teamId);
+  }
+
+  async getUploadUrlForTask(
+    actor: UserItem,
+    taskId: string,
+    filename: string,
+    contentType: string,
+  ) {
+    if (!this.s3) throw new Error("S3Service not configured");
+    const task = await this.repo.getTaskById(taskId);
+    if (!task) throw new NotFoundException("Task not found");
+    if (actor.role !== "MANAGER" && actor.primaryTeamId !== task.teamId) {
+      throw new ForbiddenException("Access denied to upload for this task");
+    }
+    const key = `tasks/${taskId}/attachments/${uuidv4()}_${filename}`;
+    const uploadUrl = await this.s3.getPresignedUploadUrl(key, contentType);
+    const objectUrl = this.s3.getObjectUrl(key);
+    return { uploadUrl, key, objectUrl };
+  }
+
+  async invokeImageResize(functionName: string, payload: any) {
+    if (!this.lambda) throw new Error("LambdaService not configured");
+    const res = await this.lambda.invoke(functionName, payload, "RequestResponse");
+    return res;
   }
 }

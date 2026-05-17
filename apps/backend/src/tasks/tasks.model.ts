@@ -1,4 +1,3 @@
-
 export interface Attachment {
   attachmentId: string;
   originalKey: string;
@@ -26,4 +25,6 @@ export interface TaskItem {
   attachments?: Attachment[];
   // helper attribute for GSIs
   statusDeadline?: string; // <STATUS>#<DEADLINE>
+
+  
 }
