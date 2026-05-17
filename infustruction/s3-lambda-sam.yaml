@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: "CirrusBoard - S3 event -> image resize Lambda"
+
+Parameters:
+  TasksBucketName:
+    Type: String
+    Default: cirrusboard-tasks-uploads
+  TasksTableName:
+    Type: String
+    Default: Tasks
+
+Resources:
+  TasksBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref TasksBucketName
+
+  ImageResizeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: nodejs20.x
+      Handler: integrations/lambda/handlers/s3-image-resize.handler
+      CodeUri: ../apps/backend/dist
+      MemorySize: 1024
+      Timeout: 30
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref TasksBucketName
+        - S3WritePolicy:
+            BucketName: !Ref TasksBucketName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTableName
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTableName
+      Events:
+        UploadEvent:
+          Type: S3
+          Properties:
+            Bucket: !Ref TasksBucket
+            Events: s3:ObjectCreated:*
+
+Outputs:
+  TasksBucketName:
+    Value: !Ref TasksBucket
+  ImageResizeFunctionArn:
+    Value: !GetAtt ImageResizeFunction.Arn
