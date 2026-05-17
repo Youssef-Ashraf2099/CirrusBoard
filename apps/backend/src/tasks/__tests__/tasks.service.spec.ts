@@ -1,6 +1,7 @@
 import { TasksService } from "../tasks.service";
 import { TasksRepository } from "../tasks.repository";
-import { TaskItem, UserPrincipal } from "../tasks.model";
+import { TaskItem } from "../tasks.model";
+import { UserItem } from "../../users/users.model";
 
 describe("TasksService", () => {
   let service: TasksService;
@@ -18,33 +19,36 @@ describe("TasksService", () => {
   });
 
   it("allows manager to create task", async () => {
-    const actor: UserPrincipal = { userId: "ali", role: "Manager" };
+    const actor: UserItem = { userId: "ali", role: "MANAGER" } as any;
     (repo.createTask as jest.Mock).mockResolvedValue({
       taskId: "1",
       title: "x",
     } as any);
-    const t = await service.createTask(actor, { title: "x", teamId: "team-a" });
+    const t = await service.createTask(actor, {
+      title: "x",
+      teamId: "team-a",
+    } as any);
     expect(repo.createTask).toHaveBeenCalled();
     expect(t.taskId).toBe("1");
   });
 
   it("prevents employee from creating task", async () => {
-    const actor: UserPrincipal = {
+    const actor: UserItem = {
       userId: "sara",
-      role: "Employee",
-      teamId: "team-a",
-    };
+      role: "EMPLOYEE",
+      primaryTeamId: "team-a",
+    } as any;
     await expect(
       service.createTask(actor, { title: "x", teamId: "team-a" } as any),
     ).rejects.toBeTruthy();
   });
 
   it("allows assigned employee to update status", async () => {
-    const actor: UserPrincipal = {
+    const actor: UserItem = {
       userId: "sara",
-      role: "Employee",
-      teamId: "team-a",
-    };
+      role: "EMPLOYEE",
+      primaryTeamId: "team-a",
+    } as any;
     (repo.getTaskById as jest.Mock).mockResolvedValue({
       taskId: "1",
       assigneeId: "sara",
@@ -60,11 +64,11 @@ describe("TasksService", () => {
   });
 
   it("prevents employee from updating others task", async () => {
-    const actor: UserPrincipal = {
+    const actor: UserItem = {
       userId: "om",
-      role: "Employee",
-      teamId: "team-b",
-    };
+      role: "EMPLOYEE",
+      primaryTeamId: "team-b",
+    } as any;
     (repo.getTaskById as jest.Mock).mockResolvedValue({
       taskId: "1",
       assigneeId: "sara",
