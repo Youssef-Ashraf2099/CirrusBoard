@@ -4,6 +4,7 @@ import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UserItem } from '../users/users.model';
 import { TaskItem } from './tasks.model';
+import { UploadRequestDto } from './dto/upload-request.dto';
 
 const DummyUser: UserItem = {
   PK: 'USER#dummy',
@@ -54,5 +55,11 @@ export class TasksController {
   @ApiOperation({ summary: 'List tasks for a team' })
   listForTeam(@Param('teamId') teamId: string) {
     return this.tasksService.listTasksForTeam(DummyUser, teamId);
+  }
+
+  @Post(':id/upload-url')
+  @ApiOperation({ summary: 'Get presigned upload URL for a task attachment' })
+  presign(@Param('id') id: string, @Body() body: UploadRequestDto) {
+    return this.tasksService.getUploadUrlForTask(DummyUser, id, body.filename, body.contentType);
   }
 }
