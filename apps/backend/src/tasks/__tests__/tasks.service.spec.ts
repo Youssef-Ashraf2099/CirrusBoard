@@ -20,7 +20,12 @@ describe("TasksService", () => {
     sns = {
       publishTaskAssigned: jest.fn(),
     } as any;
-    service = new TasksService(repo as TasksRepository, undefined, undefined, sns as any);
+    service = new TasksService(
+      repo as TasksRepository,
+      undefined,
+      undefined,
+      sns as any,
+    );
   });
 
   it("allows manager to create task", async () => {

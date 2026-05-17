@@ -10,13 +10,11 @@ describe("CognitoAuthGuard", () => {
   });
 
   it("allows valid token and attaches user", async () => {
-    const mockVerify = jest
-      .fn()
-      .mockResolvedValue({
-        sub: "u1",
-        email: "u1@example.com",
-        name: "User One",
-      });
+    const mockVerify = jest.fn().mockResolvedValue({
+      sub: "u1",
+      email: "u1@example.com",
+      name: "User One",
+    });
     const mockCreate = jest.fn().mockReturnValue({ verify: mockVerify });
     jest.doMock("aws-jwt-verify", () => ({
       CognitoJwtVerifier: { create: mockCreate },
@@ -49,7 +47,9 @@ describe("CognitoAuthGuard", () => {
       CognitoJwtVerifier: { create: mockCreate },
     }));
     const { CognitoAuthGuard } = await import("../cognito-auth.guard");
-    const guard = new CognitoAuthGuard({ syncFromCognitoClaims: jest.fn() } as any);
+    const guard = new CognitoAuthGuard({
+      syncFromCognitoClaims: jest.fn(),
+    } as any);
 
     const req: any = { headers: {} };
     const ctx: any = { switchToHttp: () => ({ getRequest: () => req }) };
@@ -66,7 +66,9 @@ describe("CognitoAuthGuard", () => {
       CognitoJwtVerifier: { create: mockCreate },
     }));
     const { CognitoAuthGuard } = await import("../cognito-auth.guard");
-    const guard = new CognitoAuthGuard({ syncFromCognitoClaims: jest.fn() } as any);
+    const guard = new CognitoAuthGuard({
+      syncFromCognitoClaims: jest.fn(),
+    } as any);
 
     const req: any = { headers: { authorization: "Bearer badtoken" } };
     const ctx: any = { switchToHttp: () => ({ getRequest: () => req }) };
