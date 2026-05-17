@@ -1,4 +1,8 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  HeadObjectCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { getAwsClientOptions } from "../../config/aws.config";
 import { S3Config } from "../../config/s3.config";
@@ -17,6 +21,20 @@ export class S3Service {
       ContentType: contentType,
     });
     return getSignedUrl(this.client, cmd, { expiresIn: expires });
+  }
+
+  async getObjectMetadata(key: string) {
+    const cmd = new HeadObjectCommand({
+      Bucket: S3Config.bucketName,
+      Key: key,
+    });
+    const res: any = await this.client.send(cmd as any);
+    return {
+      contentLength: res.ContentLength,
+      eTag: res.ETag,
+      contentType: res.ContentType,
+      lastModified: res.LastModified,
+    };
   }
 
   getObjectUrl(key: string): string {
