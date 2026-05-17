@@ -8,7 +8,7 @@ export class CreateUserDto {
   @ApiProperty({ example: 'John Doe' })
   name: string;
 
-  @ApiProperty({ example: 'EMPLOYEE', enum: ['EMPLOYEE', 'MANAGER'] })
+  @ApiProperty({ example: 'EMPLOYEE', enum: ['EMPLOYEE', 'MANAGER', 'ADMIN'] })
   role: UserRole;
 
   @ApiProperty({ required: false })

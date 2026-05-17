@@ -9,6 +9,7 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import { UserItem } from "./users.model";
 import { v4 as uuidv4 } from "uuid";
+import { CognitoClaims, buildCognitoUserItem } from "../common/auth/cognito-auth.utils";
 
 @Injectable()
 export class UsersRepository {
@@ -48,6 +49,21 @@ export class UsersRepository {
       new GetCommand({ TableName: this.tableName, Key: { PK: pk } }) as any,
     );
     return (res as any).Item ?? null;
+  }
+
+  async getUserByCognitoSub(cognitoSub: string): Promise<UserItem | null> {
+    return this.getUserById(cognitoSub);
+  }
+
+  async upsertFromCognitoClaims(claims: CognitoClaims): Promise<UserItem> {
+    const existing = await this.getUserByCognitoSub(String(claims.sub || ""));
+    const item = buildCognitoUserItem(claims, existing);
+
+    await this.client.send(
+      new PutCommand({ TableName: this.tableName, Item: item }) as any,
+    );
+
+    return item;
   }
 
   async updateUser(

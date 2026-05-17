@@ -1,8 +1,12 @@
-
 export interface Attachment {
   attachmentId: string;
   originalKey: string;
   thumbnailKey?: string;
+  thumbnailUrl?: string;
+  contentType?: string;
+  size?: number;
+  filename?: string;
+  path?: string;
   uploadedAt: string;
   version?: number;
 }
