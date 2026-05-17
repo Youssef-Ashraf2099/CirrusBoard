@@ -2,22 +2,54 @@
 set -e
 
 DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT:-http://dynamodb:8000}
+LOCALSTACK_ENDPOINT=${LOCALSTACK_ENDPOINT:-http://localstack:4566}
+AWS_REGION=${AWS_REGION:-eu-north-1}
+
+########################################################
+# HEALTH CHECKS
+########################################################
 
 echo "Waiting for DynamoDB to become available at ${DYNAMODB_ENDPOINT}..."
-
 attempts=0
 until curl -s ${DYNAMODB_ENDPOINT} >/dev/null 2>&1; do
   attempts=$((attempts+1))
-
   if [ $attempts -ge 30 ]; then
     echo "DynamoDB did not become available after 30 seconds."
     exit 1
   fi
-
   sleep 1
 done
-
 echo "DynamoDB is ready."
+
+echo "Waiting for LocalStack to become available at ${LOCALSTACK_ENDPOINT}..."
+attempts=0
+until curl -s ${LOCALSTACK_ENDPOINT}/_localstack/health | grep -q '"cognito-idp":'; do
+  attempts=$((attempts+1))
+  if [ $attempts -ge 30 ]; then
+    echo "LocalStack Cognito service did not become available after 30 seconds."
+    exit 1
+  fi
+  sleep 1
+done
+echo "LocalStack Cognito is ready."
+
+########################################################
+# COGNITO INITIALIZATION
+########################################################
+
+echo "Creating Cognito User Pool..."
+aws cognito-idp create-user-pool \
+  --pool-name "MyUserPool" \
+  --region "${AWS_REGION}" \
+  --user-pool-tags "_custom_id_=${COGNITO_USER_POOL_ID}" \
+  --endpoint-url "${LOCALSTACK_ENDPOINT}" || true
+
+echo "Creating Cognito User Pool Client..."
+aws cognito-idp create-user-pool-client \
+  --user-pool-id "${COGNITO_USER_POOL_ID}" \
+  --client-name "_custom_id_:${COGNITO_USER_POOL_CLIENT_ID}" \
+  --region "${AWS_REGION}" \
+  --endpoint-url "${LOCALSTACK_ENDPOINT}" || true
 
 ########################################################
 # USERS TABLE
@@ -265,5 +297,5 @@ aws dynamodb create-table \
 ########################################################
 
 echo "========================================="
-echo "DynamoDB initialization completed."
+echo "AWS Services initialization completed."
 echo "========================================="

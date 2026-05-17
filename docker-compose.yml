@@ -16,6 +16,8 @@ services:
       COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID}
       COGNITO_USER_POOL_CLIENT_ID: ${COGNITO_USER_POOL_CLIENT_ID}
       COGNITO_ISSUER: ${COGNITO_ISSUER}
+      # Point Cognito directly to the LocalStack container instead of port 9229
+      COGNITO_ENDPOINT: http://localstack:4566
     ports:
       - "3001:3000"
     depends_on:
