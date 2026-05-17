@@ -136,8 +136,13 @@ export class TasksRepository {
     taskId: string,
     attachmentId: string,
     patch: Partial<
-      Partial<TaskItem> & { size?: number; thumbnailKey?: string }
+      Partial<TaskItem> & {
+        size?: number;
+        thumbnailKey?: string;
+        thumbnailUrl?: string;
+      }
     >,
+    taskUpdates: Partial<TaskItem> = {},
   ): Promise<TaskItem> {
     const task = await this.getTaskById(taskId);
     if (!task) throw new Error("Task not found");
@@ -150,6 +155,7 @@ export class TasksRepository {
     const updated = await this.updateTask(taskId, {
       attachments: newAttachments,
       updatedAt: new Date().toISOString(),
+      ...taskUpdates,
     });
     return updated;
   }

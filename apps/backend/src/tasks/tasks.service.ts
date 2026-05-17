@@ -2,6 +2,7 @@ import {
   Injectable,
   ForbiddenException,
   NotFoundException,
+  BadRequestException,
 } from "@nestjs/common";
 import { TasksRepository } from "./tasks.repository";
 import { TaskItem, Attachment } from "./tasks.model";
@@ -170,6 +171,17 @@ export class TasksService {
     const meta = await this.s3.getObjectMetadata(key);
     const size = meta.contentLength ?? body.size;
 
+    if (body.eTag) {
+      const actual = meta.eTag ? meta.eTag.replace(/"/g, "") : undefined;
+      const expected = body.eTag.replace(/"/g, "");
+      if (!actual || actual !== expected) {
+        throw new BadRequestException("ETag validation failed");
+      }
+    }
+
+    const thumbnailKey = key.replace(/(\.[^.]+)$/, (m: string) => `-thumb${m}`);
+    const thumbnailUrl = this.s3.getObjectUrl(thumbnailKey);
+
     // update attachment with size and uploadedAt
     const updatedTask = await this.repo.updateAttachment(
       taskId,
@@ -178,7 +190,10 @@ export class TasksService {
         size,
         uploadedAt: new Date().toISOString(),
         version: (att.version ?? 1) + 1,
+        thumbnailKey,
+        thumbnailUrl,
       } as any,
+      { latestThumbnailUrl: thumbnailUrl },
     );
 
     // optionally invoke resize lambda
@@ -195,9 +210,16 @@ export class TasksService {
           try {
             const payload = JSON.parse((res as any).Payload as string);
             if (payload.thumbnailKey) {
-              await this.repo.updateAttachment(taskId, att.attachmentId, {
-                thumbnailKey: payload.thumbnailKey,
-              } as any);
+              const latestUrl = this.s3.getObjectUrl(payload.thumbnailKey);
+              await this.repo.updateAttachment(
+                taskId,
+                att.attachmentId,
+                {
+                  thumbnailKey: payload.thumbnailKey,
+                  thumbnailUrl: latestUrl,
+                } as any,
+                { latestThumbnailUrl: latestUrl },
+              );
             }
           } catch (e) {
             // ignore parse errors

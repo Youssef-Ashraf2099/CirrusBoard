@@ -6,10 +6,21 @@ services:
     environment:
       DYNAMODB_ENDPOINT: ${DYNAMODB_ENDPOINT}
       TASKS_TABLE: ${TASKS_TABLE}
+      AWS_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_ENDPOINT: ${AWS_ENDPOINT}
+      LOCALSTACK_ENDPOINT: ${LOCALSTACK_ENDPOINT}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE}
+      COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID}
+      COGNITO_USER_POOL_CLIENT_ID: ${COGNITO_USER_POOL_CLIENT_ID}
+      COGNITO_ISSUER: ${COGNITO_ISSUER}
     ports:
       - "3001:3000"
     depends_on:
       - dynamodb
+      - localstack
 
   dynamodb-init:
     image: amazon/aws-cli:latest
@@ -28,3 +39,19 @@ services:
     ports:
       - "8000:8000"
     command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
+
+  localstack:
+    image: localstack/localstack:3
+    container_name: localstack
+    environment:
+      SERVICES: s3,lambda,sns,sqs,events,cognito-idp,cloudwatch,logs,sts
+      DEFAULT_REGION: ${AWS_REGION}
+      EDGE_PORT: 4566
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack-data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  localstack-data:

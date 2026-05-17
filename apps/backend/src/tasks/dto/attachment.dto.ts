@@ -29,6 +29,11 @@ export class AttachmentDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
+  thumbnailUrl?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
   contentType?: string;
 
   @ApiProperty({ required: false })
