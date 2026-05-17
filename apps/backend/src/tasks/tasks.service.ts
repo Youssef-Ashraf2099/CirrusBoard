@@ -12,6 +12,7 @@ import { CreateTaskDto } from "./dto/create-task.dto";
 import { UpdateTaskDto } from "./dto/update-task.dto";
 import { S3Service } from "../integrations/s3/s3.service";
 import { LambdaService } from "../integrations/lambda/lambda.service";
+import { SnsService } from "../integrations/sns/sns.service";
 import { canManageWorkspace, hasTeamAccess } from "../common/auth/cognito-auth.utils";
 
 @Injectable()
@@ -20,6 +21,7 @@ export class TasksService {
     private readonly repo: TasksRepository,
     private readonly s3?: S3Service,
     private readonly lambda?: LambdaService,
+    private readonly sns?: SnsService,
   ) {}
 
   async createTask(actor: UserItem, input: CreateTaskDto): Promise<TaskItem> {
@@ -91,6 +93,19 @@ export class TasksService {
       assigneeId,
       updatedAt: new Date().toISOString(),
     });
+
+    if (this.sns) {
+      try {
+        await this.sns.publishTaskAssigned({
+          taskId,
+          teamId: task.teamId,
+          assigneeId,
+          assignedBy: actor.userId,
+        });
+      } catch (e) {
+        // ignore notification errors for now
+      }
+    }
 
     return updated;
   }

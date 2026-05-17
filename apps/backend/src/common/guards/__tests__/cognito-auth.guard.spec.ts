@@ -4,6 +4,9 @@ describe("CognitoAuthGuard", () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
+    process.env.COGNITO_USER_POOL_ID = "local-pool";
+    process.env.COGNITO_USER_POOL_CLIENT_ID = "local-client";
+    process.env.AWS_REGION = "us-east-1";
   });
 
   it("allows valid token and attaches user", async () => {

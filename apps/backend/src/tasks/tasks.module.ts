@@ -6,6 +6,7 @@ import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { S3Module } from "../integrations/s3/s3.module";
 import { LambdaModule } from "../integrations/lambda/lambda.module";
+import { SnsModule } from "../integrations/sns/sns.module";
 
 const dynamoClientProvider = {
   provide: "DYNAMO_CLIENT",
@@ -24,7 +25,7 @@ const tableNameProvider = {
 };
 
 @Module({
-  imports: [S3Module, LambdaModule],
+  imports: [S3Module, LambdaModule, SnsModule],
   controllers: [TasksController],
   providers: [
     dynamoClientProvider,
