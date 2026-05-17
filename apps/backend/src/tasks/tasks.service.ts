@@ -13,7 +13,10 @@ import { UpdateTaskDto } from "./dto/update-task.dto";
 import { S3Service } from "../integrations/s3/s3.service";
 import { LambdaService } from "../integrations/lambda/lambda.service";
 import { SnsService } from "../integrations/sns/sns.service";
-import { canManageWorkspace, hasTeamAccess } from "../common/auth/cognito-auth.utils";
+import {
+  canManageWorkspace,
+  hasTeamAccess,
+} from "../common/auth/cognito-auth.utils";
 
 @Injectable()
 export class TasksService {
