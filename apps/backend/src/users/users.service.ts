@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { UsersRepository } from "./users.repository";
 import { UserItem } from "./users.model";
+import { CognitoClaims } from "../common/auth/cognito-auth.utils";
 
 @Injectable()
 export class UsersService {
@@ -14,6 +15,14 @@ export class UsersService {
     const u = await this.repo.getUserById(userId);
     if (!u) throw new NotFoundException("User not found");
     return u;
+  }
+
+  async syncFromCognitoClaims(claims: CognitoClaims): Promise<UserItem> {
+    return this.repo.upsertFromCognitoClaims(claims);
+  }
+
+  async findByCognitoSub(cognitoSub: string): Promise<UserItem | null> {
+    return this.repo.getUserByCognitoSub(cognitoSub);
   }
 
   async updateUser(

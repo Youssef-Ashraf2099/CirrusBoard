@@ -7,6 +7,7 @@ import { ProjectsRepository } from "./projects.repository";
 import { ProjectItem } from "./projects.model";
 import { v4 as uuidv4 } from "uuid";
 import { UserItem } from "../users/users.model";
+import { canManageWorkspace, hasTeamAccess } from "../common/auth/cognito-auth.utils";
 
 @Injectable()
 export class ProjectsService {
@@ -16,7 +17,7 @@ export class ProjectsService {
     actor: UserItem,
     input: Partial<ProjectItem>,
   ): Promise<ProjectItem> {
-    if (actor.role !== "MANAGER")
+    if (!canManageWorkspace(actor))
       throw new ForbiddenException("Only managers may create projects");
     const now = new Date().toISOString();
     const id = uuidv4();
@@ -39,7 +40,7 @@ export class ProjectsService {
   ): Promise<ProjectItem> {
     const project = await this.repo.getProjectById(projectId);
     if (!project) throw new NotFoundException("Project not found");
-    if (actor.role !== "MANAGER" && actor.primaryTeamId !== project.teamId)
+    if (!hasTeamAccess(actor, project.teamId || ""))
       throw new ForbiddenException("Access denied");
     return project;
   }
@@ -51,7 +52,7 @@ export class ProjectsService {
   ): Promise<ProjectItem> {
     const project = await this.repo.getProjectById(projectId);
     if (!project) throw new NotFoundException("Project not found");
-    if (actor.role !== "MANAGER" && actor.primaryTeamId !== project.teamId)
+    if (!hasTeamAccess(actor, project.teamId || ""))
       throw new ForbiddenException("Access denied");
     updates.updatedAt = new Date().toISOString();
     return this.repo.updateProject(projectId, updates);
@@ -60,7 +61,7 @@ export class ProjectsService {
   async deleteProject(actor: UserItem, projectId: string): Promise<void> {
     const project = await this.repo.getProjectById(projectId);
     if (!project) throw new NotFoundException("Project not found");
-    if (actor.role !== "MANAGER" && actor.primaryTeamId !== project.teamId)
+    if (!hasTeamAccess(actor, project.teamId || ""))
       throw new ForbiddenException("Access denied");
     await this.repo.deleteProject(projectId);
   }
