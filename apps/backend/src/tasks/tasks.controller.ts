@@ -8,11 +8,11 @@ import {
   Delete,
   UnauthorizedException,
 } from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiBody } from "@nestjs/swagger";
+import { ApiTags, ApiOperation, ApiBody, ApiBearerAuth } from "@nestjs/swagger";
 import { TasksService } from "./tasks.service";
 import { CreateTaskDto } from "./dto/create-task.dto";
-import { UploadRequestDto } from "./dto/upload-request.dto";
-import { ResizeRequestDto } from "./dto/resize-request.dto";
+//import { UploadRequestDto } from "./dto/upload-request.dto";
+//import { ResizeRequestDto } from "./dto/resize-request.dto";
 import { UploadCompleteDto } from "./dto/upload-complete.dto";
 import { UserItem } from "../users/users.model";
 import { TaskItem } from "./tasks.model";
@@ -21,6 +21,7 @@ import { User } from "../common/decorators/user.decorator";
 // No dummy fallback in controllers; require authentication via `@User()` decorator
 
 @ApiTags("Tasks")
+@ApiBearerAuth()
 @Controller("tasks")
 export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
@@ -81,14 +82,7 @@ export class TasksController {
     return this.tasksService.deleteTask(user as UserItem, id);
   }
 
-  @Get("team/:teamId")
-  @ApiOperation({ summary: "List tasks for a team" })
-  listForTeam(@User() user: any, @Param("teamId") teamId: string) {
-    if (!user) throw new UnauthorizedException("Authentication required");
-    return this.tasksService.listTasksForTeam(user as UserItem, teamId);
-  }
-
-  @Post(":id/upload-url")
+  /*@Post(":id/upload-url")
   @ApiOperation({ summary: "Get presigned upload URL for a task attachment" })
   presign(
     @User() user: any,
@@ -102,7 +96,7 @@ export class TasksController {
       body.filename,
       body.contentType,
     );
-  }
+  }*/
 
   @Post(":id/upload-complete")
   @ApiOperation({ summary: "Confirm upload and update attachment metadata" })
@@ -115,7 +109,7 @@ export class TasksController {
     return this.tasksService.confirmUpload(user as UserItem, id, body as any);
   }
 
-  @Post(":id/resize")
+  /*@Post(":id/resize")
   @ApiOperation({ summary: "Resize an attachment via Lambda" })
   async resize(
     @User() user: any,
@@ -137,5 +131,5 @@ export class TasksController {
       body.functionName || process.env.IMAGE_RESIZE_FUNCTION || "image-resize";
     const res = await this.tasksService.invokeImageResize(fn, { key });
     return res;
-  }
+  }*/
 }

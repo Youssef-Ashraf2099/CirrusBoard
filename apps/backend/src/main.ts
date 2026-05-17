@@ -1,3 +1,4 @@
+import "./config/load-env";
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
@@ -12,6 +13,14 @@ async function bootstrap() {
     .setTitle("CirrusBoard API")
     .setDescription("The CirrusBoard API description")
     .setVersion("1.0")
+    .addBearerAuth(
+      {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "JWT",
+      },
+      "bearer",
+    )
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup("api/docs", app, document);
