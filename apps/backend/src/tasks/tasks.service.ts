@@ -13,6 +13,7 @@ import { UpdateTaskDto } from "./dto/update-task.dto";
 import { S3Service } from "../integrations/s3/s3.service";
 import { LambdaService } from "../integrations/lambda/lambda.service";
 import { SnsService } from "../integrations/sns/sns.service";
+import { AuditLogsService } from "../audit-logs/audit-logs.service";
 import {
   canManageWorkspace,
   hasTeamAccess,
@@ -25,7 +26,56 @@ export class TasksService {
     private readonly s3?: S3Service,
     private readonly lambda?: LambdaService,
     private readonly sns?: SnsService,
+    private readonly auditLogs?: AuditLogsService,
   ) {}
+
+  private serializeAuditValue(value: unknown) {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value === "string") return value;
+    try {
+      return JSON.stringify(value);
+    } catch (e) {
+      return String(value);
+    }
+  }
+
+  private async recordAuditLog(
+    taskId: string,
+    actorId: string,
+    action: string,
+    oldValue?: unknown,
+    newValue?: unknown,
+  ) {
+    const payload = {
+      taskId,
+      action,
+      actorId,
+      oldValue: this.serializeAuditValue(oldValue),
+      newValue: this.serializeAuditValue(newValue),
+    };
+
+    const auditFn =
+      process.env.TASK_AUDIT_LOG_FUNCTION ||
+      process.env.AUDIT_LOG_LAMBDA ||
+      "";
+
+    if (this.lambda && auditFn) {
+      try {
+        await this.lambda.invoke(auditFn, payload, "Event");
+        return;
+      } catch (e) {
+        // fall back to direct audit log write
+      }
+    }
+
+    if (this.auditLogs) {
+      try {
+        await this.auditLogs.addAuditLog(taskId, payload as any);
+      } catch (e) {
+        // ignore audit log failures
+      }
+    }
+  }
 
   async createTask(actor: UserItem, input: CreateTaskDto): Promise<TaskItem> {
     if (!canManageWorkspace(actor)) {
@@ -46,7 +96,14 @@ export class TasksService {
       createdAt: now,
       updatedAt: now,
     };
-    return this.repo.createTask(task as any);
+    const created = await this.repo.createTask(task as any);
+    await this.recordAuditLog(created.taskId, actor.userId, "TASK_CREATED", undefined, {
+      title: created.title,
+      status: created.status,
+      assigneeId: created.assigneeId,
+      teamId: created.teamId,
+    });
+    return created;
   }
 
   async getTask(actor: UserItem, taskId: string): Promise<TaskItem> {
@@ -75,6 +132,11 @@ export class TasksService {
       updatedAt: new Date().toISOString(),
     };
     const updated = await this.repo.updateTask(taskId, updates);
+    await this.recordAuditLog(taskId, actor.userId, "TASK_STATUS_UPDATED", {
+      status: task.status,
+    }, {
+      status,
+    });
     return updated;
   }
   async assignTask(
@@ -92,9 +154,16 @@ export class TasksService {
       throw new NotFoundException("Task not found");
     }
 
+    const previousAssignee = task.assigneeId;
     const updated = await this.repo.updateTask(taskId, {
       assigneeId,
       updatedAt: new Date().toISOString(),
+    });
+
+    await this.recordAuditLog(taskId, actor.userId, "TASK_ASSIGNED", {
+      assigneeId: previousAssignee,
+    }, {
+      assigneeId,
     });
 
     if (this.sns) {
@@ -119,6 +188,10 @@ export class TasksService {
     if (!hasTeamAccess(actor, task.teamId)) {
       throw new ForbiddenException("Access denied");
     }
+    await this.recordAuditLog(taskId, actor.userId, "TASK_DELETED", {
+      status: task.status,
+      assigneeId: task.assigneeId,
+    });
     await this.repo.deleteTask(taskId);
   }
 
@@ -248,6 +321,11 @@ export class TasksService {
         // ignore lambda errors for now
       }
     }
+
+    await this.recordAuditLog(taskId, actor.userId, "TASK_ATTACHMENT_CONFIRMED", undefined, {
+      attachmentId: att.attachmentId,
+      key,
+    });
 
     return updatedTask;
   }

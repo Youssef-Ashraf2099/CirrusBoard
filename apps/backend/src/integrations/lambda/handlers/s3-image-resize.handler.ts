@@ -13,7 +13,18 @@ import { S3Config } from "../../../config/s3.config";
 import sharp = require("sharp");
 
 const region = process.env.AWS_REGION || S3Config.region;
-const client = new S3Client({ region });
+const s3Endpoint =
+  process.env.S3_ENDPOINT ||
+  process.env.AWS_ENDPOINT ||
+  process.env.LOCALSTACK_ENDPOINT ||
+  S3Config.endpoint;
+const forcePathStyle =
+  process.env.S3_FORCE_PATH_STYLE === "true" || S3Config.forcePathStyle;
+const client = new S3Client({
+  region,
+  ...(s3Endpoint ? { endpoint: s3Endpoint } : {}),
+  forcePathStyle,
+});
 const dynamo = DynamoDBDocumentClient.from(
   new DynamoDBClient({
     region,
