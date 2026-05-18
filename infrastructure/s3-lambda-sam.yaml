@@ -5,7 +5,7 @@ Description: "CirrusBoard - S3 event -> image resize Lambda"
 Parameters:
   TasksBucketName:
     Type: String
-    Default: cirrusboard-tasks-uploads
+    Default: cirrusboard-upload
   TasksTableName:
     Type: String
     Default: Tasks
