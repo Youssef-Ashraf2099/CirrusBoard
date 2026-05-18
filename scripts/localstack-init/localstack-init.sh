@@ -16,6 +16,8 @@ S3_BUCKET_NAME=${S3_BUCKET_NAME:-cirrusboard-upload}
 IMAGE_RESIZE_FUNCTION=${IMAGE_RESIZE_FUNCTION:-image-resize}
 TASK_ASSIGN_WORKER_FUNCTION=${TASK_ASSIGN_WORKER_FUNCTION:-task-assignment-worker}
 TASK_AUDIT_LOG_FUNCTION=${TASK_AUDIT_LOG_FUNCTION:-task-audit-log}
+COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID:-local-pool}
+COGNITO_USER_POOL_CLIENT_ID=${COGNITO_USER_POOL_CLIENT_ID:-local-client}
 TOPIC_NAME=${SNS_TASK_ASSIGN_TOPIC_NAME:-cirrusboard-task-assign}
 QUEUE_NAME=${SQS_TASK_ASSIGN_QUEUE_NAME:-cirrusboard-task-assign-queue}
 LAMBDA_ROLE_ARN=${LAMBDA_ROLE_ARN:-arn:aws:iam::${ACCOUNT_ID}:role/lambda-role}
@@ -118,6 +120,30 @@ create_bucket() {
 }
 
 create_bucket
+
+echo "Waiting for LocalStack to become available at ${LOCALSTACK_ENDPOINT}..."
+attempts=0
+until curl -s ${LOCALSTACK_ENDPOINT}/_localstack/health | grep -q '"cognito-idp":'; do
+  attempts=$((attempts+1))
+  if [ $attempts -ge 30 ]; then
+    echo "LocalStack Cognito service did not become available after 30 seconds."
+    exit 1
+  fi
+  sleep 1
+done
+echo "LocalStack Cognito is ready."
+
+echo "Creating Cognito User Pool..."
+awslocal cognito-idp create-user-pool \
+  --pool-name "MyUserPool" \
+  --region "${AWS_REGION}" \
+  --user-pool-tags "_custom_id_=${COGNITO_USER_POOL_ID}" || true
+
+echo "Creating Cognito User Pool Client..."
+awslocal cognito-idp create-user-pool-client \
+  --user-pool-id "${COGNITO_USER_POOL_ID}" \
+  --client-name "_custom_id_:${COGNITO_USER_POOL_CLIENT_ID}" \
+  --region "${AWS_REGION}" || true
 
 IMAGE_RESIZE_ENV="Variables={AWS_REGION=${AWS_REGION},TASKS_TABLE=${TASKS_TABLE},DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT},S3_ENDPOINT=${S3_ENDPOINT},S3_FORCE_PATH_STYLE=${S3_FORCE_PATH_STYLE},AWS_ENDPOINT=${LOCALSTACK_ENDPOINT},LOCALSTACK_ENDPOINT=${LOCALSTACK_ENDPOINT}}"
 TASK_ASSIGN_ENV="Variables={AWS_REGION=${AWS_REGION},SES_FROM_ADDRESS=${SES_FROM_ADDRESS},SES_TO_ADDRESS=${SES_TO_ADDRESS},SES_ENDPOINT=${SES_ENDPOINT},AWS_ENDPOINT=${LOCALSTACK_ENDPOINT},LOCALSTACK_ENDPOINT=${LOCALSTACK_ENDPOINT}}"
