@@ -55,9 +55,7 @@ export class TasksService {
     };
 
     const auditFn =
-      process.env.TASK_AUDIT_LOG_FUNCTION ||
-      process.env.AUDIT_LOG_LAMBDA ||
-      "";
+      process.env.TASK_AUDIT_LOG_FUNCTION || process.env.AUDIT_LOG_LAMBDA || "";
 
     if (this.lambda && auditFn) {
       try {
@@ -97,12 +95,18 @@ export class TasksService {
       updatedAt: now,
     };
     const created = await this.repo.createTask(task as any);
-    await this.recordAuditLog(created.taskId, actor.userId, "TASK_CREATED", undefined, {
-      title: created.title,
-      status: created.status,
-      assigneeId: created.assigneeId,
-      teamId: created.teamId,
-    });
+    await this.recordAuditLog(
+      created.taskId,
+      actor.userId,
+      "TASK_CREATED",
+      undefined,
+      {
+        title: created.title,
+        status: created.status,
+        assigneeId: created.assigneeId,
+        teamId: created.teamId,
+      },
+    );
     return created;
   }
 
@@ -132,11 +136,17 @@ export class TasksService {
       updatedAt: new Date().toISOString(),
     };
     const updated = await this.repo.updateTask(taskId, updates);
-    await this.recordAuditLog(taskId, actor.userId, "TASK_STATUS_UPDATED", {
-      status: task.status,
-    }, {
-      status,
-    });
+    await this.recordAuditLog(
+      taskId,
+      actor.userId,
+      "TASK_STATUS_UPDATED",
+      {
+        status: task.status,
+      },
+      {
+        status,
+      },
+    );
     return updated;
   }
   async assignTask(
@@ -160,11 +170,17 @@ export class TasksService {
       updatedAt: new Date().toISOString(),
     });
 
-    await this.recordAuditLog(taskId, actor.userId, "TASK_ASSIGNED", {
-      assigneeId: previousAssignee,
-    }, {
-      assigneeId,
-    });
+    await this.recordAuditLog(
+      taskId,
+      actor.userId,
+      "TASK_ASSIGNED",
+      {
+        assigneeId: previousAssignee,
+      },
+      {
+        assigneeId,
+      },
+    );
 
     if (this.sns) {
       try {
@@ -322,10 +338,16 @@ export class TasksService {
       }
     }
 
-    await this.recordAuditLog(taskId, actor.userId, "TASK_ATTACHMENT_CONFIRMED", undefined, {
-      attachmentId: att.attachmentId,
-      key,
-    });
+    await this.recordAuditLog(
+      taskId,
+      actor.userId,
+      "TASK_ATTACHMENT_CONFIRMED",
+      undefined,
+      {
+        attachmentId: att.attachmentId,
+        key,
+      },
+    );
 
     return updatedTask;
   }

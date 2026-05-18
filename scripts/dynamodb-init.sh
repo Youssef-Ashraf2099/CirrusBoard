@@ -62,6 +62,7 @@ aws dynamodb create-table \
   --attribute-definitions \
       AttributeName=PK,AttributeType=S \
       AttributeName=email,AttributeType=S \
+      AttributeName=primaryTeamId,AttributeType=S \
   --key-schema \
       AttributeName=PK,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST \
@@ -71,6 +72,18 @@ aws dynamodb create-table \
       "KeySchema": [
         {
           "AttributeName": "email",
+          "KeyType": "HASH"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      }
+    },
+    {
+      "IndexName": "primaryTeamId-index",
+      "KeySchema": [
+        {
+          "AttributeName": "primaryTeamId",
           "KeyType": "HASH"
         }
       ],
@@ -122,6 +135,7 @@ aws dynamodb create-table \
   --attribute-definitions \
       AttributeName=PK,AttributeType=S \
       AttributeName=status,AttributeType=S \
+      AttributeName=teamId,AttributeType=S \
   --key-schema \
       AttributeName=PK,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST \
@@ -131,6 +145,18 @@ aws dynamodb create-table \
       "KeySchema": [
         {
           "AttributeName": "status",
+          "KeyType": "HASH"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      }
+    },
+    {
+      "IndexName": "teamId-index",
+      "KeySchema": [
+        {
+          "AttributeName": "teamId",
           "KeyType": "HASH"
         }
       ],
@@ -162,7 +188,7 @@ aws dynamodb create-table \
   --billing-mode PAY_PER_REQUEST \
   --global-secondary-indexes '[
     {
-      "IndexName": "TeamIndex",
+      "IndexName": "teamId-index",
       "KeySchema": [
         {
           "AttributeName": "teamId",

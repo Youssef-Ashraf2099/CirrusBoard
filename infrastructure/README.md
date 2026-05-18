@@ -6,6 +6,7 @@ This folder contains separated SAM templates by responsibility:
 - `messaging-worker-sam.yaml` for SNS/SQS task assignment worker
 - `frontend-cdn-sam.yaml` for CloudFront CDN in front of the Next.js origin
 - `vpc-alb-asg.yaml` for VPC + public/private subnets + NAT + ALB + EC2 ASG
+- `dynamodb-tables.yaml` for DynamoDB tables (Users, Teams, Projects, Tasks, Comments, TaskAuditLogs)
 
 ## Build the Lambda bundle
 
@@ -30,6 +31,8 @@ npm install --platform=linux --arch=x64 --libc=glibc sharp
 sam build -t infrastructure/s3-lambda-sam.yaml
 sam deploy --guided -t infrastructure/s3-lambda-sam.yaml
 
+sam deploy --guided -t infrastructure/dynamodb-tables.yaml
+
 sam build -t infrastructure/messaging-worker-sam.yaml
 sam deploy --guided -t infrastructure/messaging-worker-sam.yaml
 
@@ -48,3 +51,4 @@ sam deploy --guided -t infrastructure/vpc-alb-asg.yaml
 - The messaging template provisions an SNS topic, an SQS queue, and a worker Lambda wired to the queue.
 - The CDN template expects a DNS origin (ALB/EC2/S3 website) and creates a CloudFront distribution.
 - The VPC template provisions two public and two private subnets across two AZs, plus NAT gateways, ALB, and an EC2 ASG.
+- The DynamoDB template provisions the core data tables and required GSIs.
