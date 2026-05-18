@@ -15,6 +15,9 @@ Parameters:
   SesToAddress:
     Type: String
     Default: ""
+  TaskAuditLogsTableName:
+    Type: String
+    Default: TaskAuditLogs
 
 Resources:
   TaskAssignTopic:
@@ -80,6 +83,21 @@ Resources:
             Queue: !GetAtt TaskAssignQueue.Arn
             BatchSize: 10
 
+  TaskAuditLogFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: nodejs20.x
+      Handler: integrations/lambda/handlers/task-audit-log.handler
+      CodeUri: ../apps/backend/dist
+      MemorySize: 256
+      Timeout: 30
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TaskAuditLogsTableName
+      Environment:
+        Variables:
+          TASK_AUDIT_LOGS_TABLE: !Ref TaskAuditLogsTableName
+
 Outputs:
   TaskAssignTopicArn:
     Value: !Ref TaskAssignTopic
@@ -87,3 +105,5 @@ Outputs:
     Value: !Ref TaskAssignQueue
   TaskAssignWorkerFunctionArn:
     Value: !GetAtt TaskAssignWorkerFunction.Arn
+  TaskAuditLogFunctionArn:
+    Value: !GetAtt TaskAuditLogFunction.Arn
