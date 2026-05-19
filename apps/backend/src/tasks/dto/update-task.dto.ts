@@ -38,4 +38,9 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsArray()
   attachments?: Attachment[];
+
+  @ApiProperty({ required: false, type: [String] })
+  @IsOptional()
+  @IsArray()
+  tags?: string[];
 }
