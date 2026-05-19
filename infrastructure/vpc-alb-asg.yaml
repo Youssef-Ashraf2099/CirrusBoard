@@ -41,6 +41,7 @@ Parameters:
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
 
 Resources:
+
   # ─── VPC ────────────────────────────────────────────────────────────────────
 
   Vpc:
@@ -258,6 +259,29 @@ Resources:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
 
+  # ─── IAM Role for SSM access ────────────────────────────────────────────────
+
+  Ec2SsmRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: cirrusboard-ec2-ssm-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  Ec2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: cirrusboard-ec2-instance-profile
+      Roles:
+        - !Ref Ec2SsmRole
+
   # ─── ALB ────────────────────────────────────────────────────────────────────
 
   ApplicationLoadBalancer:
@@ -337,6 +361,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
         - !Ref FrontendSecurityGroup
+      IamInstanceProfile: !Ref Ec2InstanceProfile
       Tags:
         - Key: Name
           Value: cirrusboard-frontend
@@ -368,6 +393,8 @@ Resources:
       LaunchTemplateData:
         ImageId: !Ref AmiId
         InstanceType: !Ref InstanceType
+        IamInstanceProfile:
+          Arn: !GetAtt Ec2InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref AppSecurityGroup
         UserData:
