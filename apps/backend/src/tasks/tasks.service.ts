@@ -2,23 +2,81 @@ import {
   Injectable,
   ForbiddenException,
   NotFoundException,
+  BadRequestException,
 } from "@nestjs/common";
 import { TasksRepository } from "./tasks.repository";
-import { TaskItem } from "./tasks.model";
+import { TaskItem, Attachment } from "./tasks.model";
 import { UserItem } from "../users/users.model";
 import { v4 as uuidv4 } from "uuid";
 import { CreateTaskDto } from "./dto/create-task.dto";
 import { UpdateTaskDto } from "./dto/update-task.dto";
 import { isPrivileged } from "../common/permissions";
+import { S3Service } from "../integrations/s3/s3.service";
+import { LambdaService } from "../integrations/lambda/lambda.service";
+import { SnsService } from "../integrations/sns/sns.service";
+import { AuditLogsService } from "../audit-logs/audit-logs.service";
+import {
+  canManageWorkspace,
+  hasTeamAccess,
+} from "../common/auth/cognito-auth.utils";
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly repo: TasksRepository) {}
+  constructor(
+    private readonly repo: TasksRepository,
+    private readonly s3?: S3Service,
+    private readonly lambda?: LambdaService,
+    private readonly sns?: SnsService,
+    private readonly auditLogs?: AuditLogsService,
+  ) {}
 
-  async createTask(
-    actor: UserItem,
-   input: CreateTaskDto,
-  ): Promise<TaskItem> {
+  private serializeAuditValue(value: unknown) {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value === "string") return value;
+    try {
+      return JSON.stringify(value);
+    } catch (e) {
+      return String(value);
+    }
+  }
+
+  private async recordAuditLog(
+    taskId: string,
+    actorId: string,
+    action: string,
+    oldValue?: unknown,
+    newValue?: unknown,
+  ) {
+    const payload = {
+      taskId,
+      action,
+      actorId,
+      oldValue: this.serializeAuditValue(oldValue),
+      newValue: this.serializeAuditValue(newValue),
+    };
+
+    const auditFn =
+      process.env.TASK_AUDIT_LOG_FUNCTION || process.env.AUDIT_LOG_LAMBDA || "";
+
+    if (this.lambda && auditFn) {
+      try {
+        await this.lambda.invoke(auditFn, payload, "Event");
+        return;
+      } catch (e) {
+        // fall back to direct audit log write
+      }
+    }
+
+    if (this.auditLogs) {
+      try {
+        await this.auditLogs.addAuditLog(taskId, payload as any);
+      } catch (e) {
+        // ignore audit log failures
+      }
+    }
+  }
+
+  async createTask(actor: UserItem, input: CreateTaskDto): Promise<TaskItem> {
     if (!isPrivileged(actor.role)) {
       throw new ForbiddenException("Only managers may create tasks");
     }
@@ -33,12 +91,26 @@ export class TasksService {
       deadline: input.deadline ?? now.split("T")[0],
       assigneeId: input.assigneeId,
       teamId: input.teamId!,
+      createdBy: actor.userId,
       attachments: input.attachments ?? [],
       tags: input.tags ?? [],
       createdAt: now,
       updatedAt: now,
     };
-    return this.repo.createTask(task as any);
+    const created = await this.repo.createTask(task as any);
+    await this.recordAuditLog(
+      created.taskId,
+      actor.userId,
+      "TASK_CREATED",
+      undefined,
+      {
+        title: created.title,
+        status: created.status,
+        assigneeId: created.assigneeId,
+        teamId: created.teamId,
+      },
+    );
+    return created;
   }
 
   async getTask(actor: UserItem, taskId: string): Promise<TaskItem> {
@@ -68,6 +140,17 @@ export class TasksService {
       statusDeadline: `${status}#${task.deadline}`,
     };
     const updated = await this.repo.updateTask(taskId, updates);
+    await this.recordAuditLog(
+      taskId,
+      actor.userId,
+      "TASK_STATUS_UPDATED",
+      {
+        status: task.status,
+      },
+      {
+        status,
+      },
+    );
     return updated;
   }
   async assignTask(
@@ -80,18 +163,44 @@ export class TasksService {
         "Only managers can assign tasks",
       );
     }
-  
+
     const task = await this.repo.getTaskById(taskId);
-  
+
     if (!task) {
       throw new NotFoundException("Task not found");
     }
-  
+
+    const previousAssignee = task.assigneeId;
     const updated = await this.repo.updateTask(taskId, {
       assigneeId,
       updatedAt: new Date().toISOString(),
     });
-  
+
+    await this.recordAuditLog(
+      taskId,
+      actor.userId,
+      "TASK_ASSIGNED",
+      {
+        assigneeId: previousAssignee,
+      },
+      {
+        assigneeId,
+      },
+    );
+
+    if (this.sns) {
+      try {
+        await this.sns.publishTaskAssigned({
+          taskId,
+          teamId: task.teamId,
+          assigneeId,
+          assignedBy: actor.userId,
+        });
+      } catch (e) {
+        // ignore notification errors for now
+      }
+    }
+
     return updated;
   }
 
@@ -138,6 +247,10 @@ export class TasksService {
     if (!isPrivileged(actor.role) && actor.primaryTeamId !== task.teamId) {
       throw new ForbiddenException("Access denied");
     }
+    await this.recordAuditLog(taskId, actor.userId, "TASK_DELETED", {
+      status: task.status,
+      assigneeId: task.assigneeId,
+    });
     await this.repo.deleteTask(taskId);
   }
 
@@ -149,5 +262,149 @@ export class TasksService {
       throw new ForbiddenException("Access denied to team tasks");
     }
     return this.repo.queryTasksByTeamId(teamId);
+  }
+
+  async getUploadUrlForTask(
+    actor: UserItem,
+    taskId: string,
+    filename: string,
+    contentType: string,
+  ) {
+    if (!this.s3) throw new Error("S3Service not configured");
+    const task = await this.repo.getTaskById(taskId);
+    if (!task) throw new NotFoundException("Task not found");
+    if (!hasTeamAccess(actor, task.teamId)) {
+      throw new ForbiddenException("Access denied to upload for this task");
+    }
+    const key = `tasks/${taskId}/attachments/${uuidv4()}_${filename}`;
+    const uploadUrl = await this.s3.getPresignedUploadUrl(key, contentType);
+    const objectUrl = this.s3.getObjectUrl(key);
+    // create attachment metadata and persist to task
+    const attachment: Attachment = {
+      attachmentId: uuidv4(),
+      originalKey: key,
+      filename,
+      path: objectUrl,
+      contentType,
+      uploadedAt: new Date().toISOString(),
+      version: 1,
+    };
+    const newAttachments = [...(task.attachments || []), attachment];
+    await this.repo.updateTask(taskId, {
+      attachments: newAttachments,
+      updatedAt: new Date().toISOString(),
+    });
+    return { uploadUrl, key, objectUrl, attachment };
+  }
+
+  async confirmUpload(
+    actor: UserItem,
+    taskId: string,
+    body: { attachmentId?: string; key?: string; eTag?: string; size?: number },
+  ) {
+    if (!this.s3) throw new Error("S3Service not configured");
+    const task = await this.repo.getTaskById(taskId);
+    if (!task) throw new NotFoundException("Task not found");
+    if (!hasTeamAccess(actor, task.teamId)) {
+      throw new ForbiddenException("Access denied to upload for this task");
+    }
+
+    // find attachment by id or key
+    let att = null as any;
+    if (body.attachmentId) {
+      att = (task.attachments || []).find(
+        (a) => a.attachmentId === body.attachmentId,
+      );
+    }
+    if (!att && body.key) {
+      att = (task.attachments || []).find((a) => a.originalKey === body.key);
+    }
+    if (!att) throw new NotFoundException("Attachment not found on task");
+
+    const key = body.key ?? att.originalKey;
+    const meta = await this.s3.getObjectMetadata(key);
+    const size = meta.contentLength ?? body.size;
+
+    if (body.eTag) {
+      const actual = meta.eTag ? meta.eTag.replace(/"/g, "") : undefined;
+      const expected = body.eTag.replace(/"/g, "");
+      if (!actual || actual !== expected) {
+        throw new BadRequestException("ETag validation failed");
+      }
+    }
+
+    const thumbnailKey = key.replace(/(\.[^.]+)$/, (m: string) => `-thumb${m}`);
+    const thumbnailUrl = this.s3.getObjectUrl(thumbnailKey);
+
+    // update attachment with size and uploadedAt
+    const updatedTask = await this.repo.updateAttachment(
+      taskId,
+      att.attachmentId,
+      {
+        size,
+        uploadedAt: new Date().toISOString(),
+        version: (att.version ?? 1) + 1,
+        thumbnailKey,
+        thumbnailUrl,
+      } as any,
+      { latestThumbnailUrl: thumbnailUrl },
+    );
+
+    // optionally invoke resize lambda
+    if (this.lambda) {
+      try {
+        const fn = process.env.IMAGE_RESIZE_FUNCTION || "image-resize";
+        const res = await this.lambda.invoke(
+          fn,
+          { key, taskId, attachmentId: att.attachmentId },
+          "Event",
+        );
+        // if lambda returns a thumbnailKey in payload, update attachment
+        if (res && (res as any).Payload) {
+          try {
+            const payload = JSON.parse((res as any).Payload as string);
+            if (payload.thumbnailKey) {
+              const latestUrl = this.s3.getObjectUrl(payload.thumbnailKey);
+              await this.repo.updateAttachment(
+                taskId,
+                att.attachmentId,
+                {
+                  thumbnailKey: payload.thumbnailKey,
+                  thumbnailUrl: latestUrl,
+                } as any,
+                { latestThumbnailUrl: latestUrl },
+              );
+            }
+          } catch (e) {
+            // ignore parse errors
+          }
+        }
+      } catch (e) {
+        // ignore lambda errors for now
+      }
+    }
+
+    await this.recordAuditLog(
+      taskId,
+      actor.userId,
+      "TASK_ATTACHMENT_CONFIRMED",
+      undefined,
+      {
+        attachmentId: att.attachmentId,
+        key,
+      },
+    );
+
+    return updatedTask;
+  }
+
+  async invokeImageResize(functionName: string, payload: any) {
+    if (!this.lambda) throw new Error("LambdaService not configured");
+    const res = await this.lambda.invoke(
+      functionName,
+      payload,
+      "RequestResponse",
+    );
+    return res;
   }
 }

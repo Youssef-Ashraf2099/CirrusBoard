@@ -10,6 +10,7 @@ import { UserItem } from "../users/users.model";
 import { isPrivileged } from "../common/permissions";
 import type { CreateProjectDto } from "./dto/create-project.dto";
 import type { UpdateProjectDto } from "./dto/update-project.dto";
+import { canManageWorkspace, hasTeamAccess } from "../common/auth/cognito-auth.utils";
 
 @Injectable()
 export class ProjectsService {

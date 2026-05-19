@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: "CirrusBoard - SNS/SQS task assignment worker"
+
+Parameters:
+  TaskAssignTopicName:
+    Type: String
+    Default: cirrusboard-task-assign
+  TaskAssignQueueName:
+    Type: String
+    Default: cirrusboard-task-assign-queue
+  SesFromAddress:
+    Type: String
+    Default: ""
+  SesToAddress:
+    Type: String
+    Default: ""
+  TaskAuditLogsTableName:
+    Type: String
+    Default: TaskAuditLogs
+
+Resources:
+  TaskAssignTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Ref TaskAssignTopicName
+
+  TaskAssignQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Ref TaskAssignQueueName
+
+  TaskAssignQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref TaskAssignQueue
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowSnsPublish
+            Effect: Allow
+            Principal: "*"
+            Action: sqs:SendMessage
+            Resource: !GetAtt TaskAssignQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref TaskAssignTopic
+
+  TaskAssignSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref TaskAssignTopic
+      Protocol: sqs
+      Endpoint: !GetAtt TaskAssignQueue.Arn
+
+  TaskAssignWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: nodejs20.x
+      Handler: integrations/lambda/handlers/task-assignment.handler
+      CodeUri: ../apps/backend/dist
+      MemorySize: 256
+      Timeout: 30
+      Policies:
+        - SQSPollerPolicy:
+            QueueName: !Ref TaskAssignQueueName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: "*"
+      Environment:
+        Variables:
+          SNS_TASK_ASSIGN_TOPIC_ARN: !Ref TaskAssignTopic
+          SQS_TASK_ASSIGN_QUEUE_URL: !Ref TaskAssignQueue
+          SES_FROM_ADDRESS: !Ref SesFromAddress
+          SES_TO_ADDRESS: !Ref SesToAddress
+      Events:
+        TaskAssignQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt TaskAssignQueue.Arn
+            BatchSize: 10
+
+  TaskAuditLogFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: nodejs20.x
+      Handler: integrations/lambda/handlers/task-audit-log.handler
+      CodeUri: ../apps/backend/dist
+      MemorySize: 256
+      Timeout: 30
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TaskAuditLogsTableName
+      Environment:
+        Variables:
+          TASK_AUDIT_LOGS_TABLE: !Ref TaskAuditLogsTableName
+
+Outputs:
+  TaskAssignTopicArn:
+    Value: !Ref TaskAssignTopic
+  TaskAssignQueueUrl:
+    Value: !Ref TaskAssignQueue
+  TaskAssignWorkerFunctionArn:
+    Value: !GetAtt TaskAssignWorkerFunction.Arn
+  TaskAuditLogFunctionArn:
+    Value: !GetAtt TaskAuditLogFunction.Arn

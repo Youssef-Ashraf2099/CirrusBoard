@@ -75,6 +75,19 @@ export class TasksRepository {
       setParts.push(`${nameKey} = ${valKey}`);
     }
 
+    // ensure statusDeadline is updated when status/deadline change
+    if (updates.status || updates.deadline) {
+      const status = updates.status ?? "TODO";
+      const deadline =
+        updates.deadline ?? new Date().toISOString().split("T")[0];
+      idx += 1;
+      const sdName = `#k${idx}`;
+      const sdVal = `:v${idx}`;
+      ExpressionAttributeNames[sdName] = "statusDeadline";
+      ExpressionAttributeValues[sdVal] = `${status}#${deadline}`;
+      setParts.push(`${sdName} = ${sdVal}`);
+    }
+
     const UpdateExpression = setParts.length
       ? `SET ${setParts.join(", ")}`
       : undefined;
@@ -119,5 +132,33 @@ export class TasksRepository {
     });
     const res = await this.client.send(cmd as any);
     return (res as any).Items ?? [];
+  }
+
+  async updateAttachment(
+    taskId: string,
+    attachmentId: string,
+    patch: Partial<
+      Partial<TaskItem> & {
+        size?: number;
+        thumbnailKey?: string;
+        thumbnailUrl?: string;
+      }
+    >,
+    taskUpdates: Partial<TaskItem> = {},
+  ): Promise<TaskItem> {
+    const task = await this.getTaskById(taskId);
+    if (!task) throw new Error("Task not found");
+    const attachments = task.attachments ?? [];
+    const idx = attachments.findIndex((a) => a.attachmentId === attachmentId);
+    if (idx === -1) throw new Error("Attachment not found");
+    const updatedAtt = { ...attachments[idx], ...patch } as any;
+    const newAttachments = [...attachments];
+    newAttachments[idx] = updatedAtt;
+    const updated = await this.updateTask(taskId, {
+      attachments: newAttachments,
+      updatedAt: new Date().toISOString(),
+      ...taskUpdates,
+    });
+    return updated;
   }
 }
