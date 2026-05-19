@@ -43,8 +43,14 @@ export class TasksRepository {
       statusDeadline: `${task.status ?? "TODO"}#${task.deadline ?? now.split("T")[0]}`,
     } as TaskItem;
 
+    const marshallable = Object.fromEntries(
+      Object.entries(item as unknown as Record<string, unknown>).filter(
+        ([, value]) => value !== undefined,
+      ),
+    );
+
     await this.client.send(
-      new PutCommand({ TableName: this.tableName, Item: item }) as any,
+      new PutCommand({ TableName: this.tableName, Item: marshallable }) as any,
     );
     return item;
   }
