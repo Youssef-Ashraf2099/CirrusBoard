@@ -52,16 +52,14 @@ Resources:
     Properties:
       CachePolicyConfig:
         Name: cirrusboard-frontend-api
-        DefaultTTL: 0
-        MaxTTL: 0
+        DefaultTTL: 1
+        MaxTTL: 1
         MinTTL: 0
         ParametersInCacheKeyAndForwardedToOrigin:
           CookiesConfig:
-            CookieBehavior: all
+            CookieBehavior: none
           HeadersConfig:
-            HeaderBehavior: whitelist
-            Headers:
-              - Authorization
+            HeaderBehavior: none
           QueryStringsConfig:
             QueryStringBehavior: all
           EnableAcceptEncodingBrotli: true

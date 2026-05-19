@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: "CirrusBoard - VPC with public/private subnets, NAT, ALB, and EC2 ASG"
+Description: "CirrusBoard - VPC, ALB, Backend ASG, and Frontend EC2 (no CloudFront)"
 
 Parameters:
   VpcCidr:
@@ -21,9 +21,12 @@ Parameters:
   InstanceType:
     Type: String
     Default: t3.micro
-  AppPort:
+  BackendPort:
     Type: Number
-    Default: 80
+    Default: 3001
+  FrontendPort:
+    Type: Number
+    Default: 3000
   MinSize:
     Type: Number
     Default: 1
@@ -38,6 +41,8 @@ Parameters:
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
 
 Resources:
+  # ─── VPC ────────────────────────────────────────────────────────────────────
+
   Vpc:
     Type: AWS::EC2::VPC
     Properties:
@@ -60,6 +65,8 @@ Resources:
     Properties:
       VpcId: !Ref Vpc
       InternetGatewayId: !Ref InternetGateway
+
+  # ─── Subnets ────────────────────────────────────────────────────────────────
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -104,6 +111,8 @@ Resources:
       Tags:
         - Key: Name
           Value: cirrusboard-private-2
+
+  # ─── Routing ────────────────────────────────────────────────────────────────
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -203,37 +212,53 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable2
 
+  # ─── Security Groups ────────────────────────────────────────────────────────
+
   AlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP/HTTPS inbound
+      GroupDescription: Allow HTTP inbound from internet
       VpcId: !Ref Vpc
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
 
-  AppSecurityGroup:
+  # Frontend EC2 - allows port 3000 from ALB only
+  FrontendSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow app traffic from ALB
+      GroupDescription: Allow Next.js traffic from ALB
       VpcId: !Ref Vpc
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: !Ref AppPort
-          ToPort: !Ref AppPort
+          FromPort: !Ref FrontendPort
+          ToPort: !Ref FrontendPort
           SourceSecurityGroupId: !Ref AlbSecurityGroup
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
+
+  # Backend ASG - allows port 3001 from ALB only
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow backend API traffic from ALB
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref BackendPort
+          ToPort: !Ref BackendPort
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  # ─── ALB ────────────────────────────────────────────────────────────────────
 
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -247,18 +272,37 @@ Resources:
         - !Ref AlbSecurityGroup
       Type: application
 
-  AlbTargetGroup:
+  # Frontend target group - port 3000
+  FrontendTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: FrontendInstance
     Properties:
-      Name: cirrusboard-tg
+      Name: cirrusboard-frontend-tg
       VpcId: !Ref Vpc
       Protocol: HTTP
-      Port: !Ref AppPort
+      Port: !Ref FrontendPort
       TargetType: instance
+      Targets:
+        - Id: !Ref FrontendInstance
+          Port: !Ref FrontendPort
       HealthCheckPath: /
       Matcher:
         HttpCode: 200-399
 
+  # Backend target group - port 3001
+  BackendTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: cirrusboard-backend-tg
+      VpcId: !Ref Vpc
+      Protocol: HTTP
+      Port: !Ref BackendPort
+      TargetType: instance
+      HealthCheckPath: /api/health
+      Matcher:
+        HttpCode: 200-399
+
+  # ALB Listener on port 80 - default goes to frontend
   AlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -267,9 +311,58 @@ Resources:
       Protocol: HTTP
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref AlbTargetGroup
+          TargetGroupArn: !Ref FrontendTargetGroup
 
-  LaunchTemplate:
+  # /api/* routes to backend
+  AlbApiListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref AlbListener
+      Priority: 10
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /api/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendTargetGroup
+
+  # ─── Frontend EC2 (public subnet, runs Next.js) ─────────────────────────────
+
+  FrontendInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref FrontendSecurityGroup
+      Tags:
+        - Key: Name
+          Value: cirrusboard-frontend
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -eu
+          dnf -y install nodejs npm git
+          # Create app directory
+          mkdir -p /app/frontend
+          # Your deployment step: pull your code here
+          # e.g. git clone https://github.com/your-org/cirrusboard.git /app
+          # For now, start a placeholder so the ALB health check passes
+          cd /app/frontend
+          cat > server.js << 'EOF'
+          const http = require('http');
+          http.createServer((req, res) => {
+            res.writeHead(200);
+            res.end('CirrusBoard frontend placeholder - deploy your Next.js app here');
+          }).listen(3000, () => console.log('Listening on :3000'));
+          EOF
+          node server.js &
+
+  # ─── Backend ASG (private subnets, runs Node API) ───────────────────────────
+
+  BackendLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateData:
@@ -281,26 +374,44 @@ Resources:
           Fn::Base64: !Sub |
             #!/bin/bash
             set -eu
-            dnf -y install nginx
-            systemctl enable nginx
-            systemctl start nginx
+            dnf -y install nodejs npm git
+            mkdir -p /app/backend
+            # Your deployment step: pull your backend code here
+            # e.g. git clone https://github.com/your-org/cirrusboard.git /app
+            # Placeholder so ALB health check passes
+            cd /app/backend
+            cat > server.js << 'EOF'
+            const http = require('http');
+            http.createServer((req, res) => {
+              if (req.url === '/api/health') {
+                res.writeHead(200);
+                res.end('ok');
+              } else {
+                res.writeHead(200);
+                res.end('CirrusBoard backend placeholder');
+              }
+            }).listen(3001, () => console.log('Listening on :3001'));
+            EOF
+            node server.js &
 
-  AppAutoScalingGroup:
+  BackendAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       LaunchTemplate:
-        LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        LaunchTemplateId: !Ref BackendLaunchTemplate
+        Version: !GetAtt BackendLaunchTemplate.LatestVersionNumber
       MinSize: !Ref MinSize
       MaxSize: !Ref MaxSize
       DesiredCapacity: !Ref DesiredCapacity
       TargetGroupARNs:
-        - !Ref AlbTargetGroup
+        - !Ref BackendTargetGroup
       HealthCheckType: ELB
       HealthCheckGracePeriod: 120
+
+# ─── Outputs ──────────────────────────────────────────────────────────────────
 
 Outputs:
   VpcId:
@@ -309,11 +420,22 @@ Outputs:
     Value: !Join [",", [!Ref PublicSubnet1, !Ref PublicSubnet2]]
   PrivateSubnetIds:
     Value: !Join [",", [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+
   AlbDnsName:
+    Description: "Access your app at this URL — http://<AlbDnsName>"
     Value: !GetAtt ApplicationLoadBalancer.DNSName
-  AlbArn:
-    Value: !Ref ApplicationLoadBalancer
-  TargetGroupArn:
-    Value: !Ref AlbTargetGroup
-  AutoScalingGroupName:
-    Value: !Ref AppAutoScalingGroup
+
+  FrontendUrl:
+    Description: "Frontend URL (Next.js)"
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}/"
+
+  BackendApiUrl:
+    Description: "Backend API URL"
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}/api/"
+
+  FrontendInstanceId:
+    Description: "Frontend EC2 instance ID (use SSM to deploy your code)"
+    Value: !Ref FrontendInstance
+
+  BackendAutoScalingGroupName:
+    Value: !Ref BackendAutoScalingGroup
