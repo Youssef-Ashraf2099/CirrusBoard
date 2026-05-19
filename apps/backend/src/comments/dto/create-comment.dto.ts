@@ -5,4 +5,7 @@ export class CreateCommentDto {
   taskId: string;
   @ApiProperty()
   content: string;
+
+  @ApiProperty({ required: false, description: 'Author userId (passed from client until auth exists)' })
+  authorId?: string;
 }

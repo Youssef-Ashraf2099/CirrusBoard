@@ -3,7 +3,10 @@ export interface ProjectItem {
   projectId: string;
   name: string;
   description?: string;
-  status?: "ACTIVE" | "ARCHIVED";
+  status?: "ACTIVE" | "ARCHIVED" | "COMPLETED";
+  progress?: number;
+  startDate?: string;
+  endDate?: string;
   createdBy?: string;
   teamId?: string;
   createdAt?: string;

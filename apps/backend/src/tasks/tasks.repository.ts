@@ -39,11 +39,18 @@ export class TasksRepository {
       deleted: task.deleted ?? false,
       latestThumbnailUrl: task.latestThumbnailUrl,
       attachments: task.attachments,
+      tags: task.tags ?? [],
       statusDeadline: `${task.status ?? "TODO"}#${task.deadline ?? now.split("T")[0]}`,
     } as TaskItem;
 
+    const marshallable = Object.fromEntries(
+      Object.entries(item as unknown as Record<string, unknown>).filter(
+        ([, value]) => value !== undefined,
+      ),
+    );
+
     await this.client.send(
-      new PutCommand({ TableName: this.tableName, Item: item }) as any,
+      new PutCommand({ TableName: this.tableName, Item: marshallable }) as any,
     );
     return item;
   }
@@ -65,6 +72,7 @@ export class TasksRepository {
     const setParts: string[] = [];
     let idx = 0;
     for (const [k, v] of Object.entries(updates)) {
+      if (v === undefined) continue;
       idx += 1;
       const nameKey = `#k${idx}`;
       const valKey = `:v${idx}`;

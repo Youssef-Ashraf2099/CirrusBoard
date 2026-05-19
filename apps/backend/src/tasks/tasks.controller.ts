@@ -40,6 +40,12 @@ export class TasksController {
     return this.tasksService.listTasksForTeam(user as UserItem, teamId);
   }
 
+  @Get('team/:teamId')
+  @ApiOperation({ summary: 'List tasks for a team' })
+  listForTeam(@Param('teamId') teamId: string) {
+    return this.tasksService.listTasksForTeam(user as  UserItem, teamId);
+  }
+
   @Get(":id")
   @ApiOperation({ summary: "Get a task by ID" })
   findOne(@User() user: any, @Param("id") id: string) {
@@ -75,6 +81,17 @@ export class TasksController {
     return this.tasksService.assignTask(user as UserItem, id, assigneeId);
   }
 
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update task fields' })
+  update(@Param('id') id: string, @Body() dto: UpdateTaskDto) {
+    return this.tasksService.updateTask(DummyUser, id, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a task' })
+  remove(@Param('id') id: string) {
+    return this.tasksService.deleteTask(DummyUser, id);
+  }
   @Delete(":id")
   @ApiOperation({ summary: "Delete a task" })
   remove(@User() user: any, @Param("id") id: string) {

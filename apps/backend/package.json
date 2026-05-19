@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "start": "ts-node -r tsconfig-paths/register src/main.ts",
+    "seed:demo-user": "ts-node scripts/seed-demo-user.ts",
     "build": "tsc -p tsconfig.build.json",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
@@ -23,6 +24,7 @@
     "@nestjs/core": "^9.0.0",
     "@nestjs/platform-express": "^9.0.0",
     "@nestjs/swagger": "^6.3.0",
+    "dotenv": "^17.4.2",
     "aws-jwt-verify": "^5.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
