@@ -24,11 +24,13 @@ export class ProjectsRepository {
       PK: pk,
       projectId: id,
       name: project.name,
-      description: project.description,
+      ...(project.description !== undefined
+        ? { description: project.description }
+        : {}),
       status: project.status ?? "ACTIVE",
       progress: project.progress ?? 0,
       startDate: project.startDate ?? now,
-      endDate: project.endDate,
+      ...(project.endDate !== undefined ? { endDate: project.endDate } : {}),
       createdBy: project.createdBy,
       teamId: project.teamId,
       createdAt: project.createdAt ?? now,
