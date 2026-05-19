@@ -24,8 +24,7 @@ const DEMO = {
 
 async function main() {
   const region = process.env.AWS_REGION || "us-east-1";
-  const table =
-    process.env.USERS_TABLE || process.env.Users_TABLE || "Users";
+  const table = process.env.USERS_TABLE ?? "Users";
   const endpoint = process.env.DYNAMODB_ENDPOINT;
 
   const low = new DynamoDBClient({
