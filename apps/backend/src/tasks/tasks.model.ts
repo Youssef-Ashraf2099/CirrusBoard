@@ -13,7 +13,6 @@ export interface Attachment {
   name?: string;
   url?: string;
   mimeType?: string;
-  size?: number;
   uploadedBy?: string;
 }
 

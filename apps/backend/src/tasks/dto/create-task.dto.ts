@@ -33,6 +33,11 @@ export class CreateTaskDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @IsString()
+  projectId?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
   @IsIn(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"])
   status?: string;
 
@@ -41,5 +46,7 @@ export class CreateTaskDto {
   @IsArray()
   attachments?: Attachment[];
   @ApiProperty({ required: false, type: [String] })
+  @IsOptional()
+  @IsArray()
   tags?: string[];
 }

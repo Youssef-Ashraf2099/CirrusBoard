@@ -8,7 +8,7 @@ import { UsersModule } from "./users/users.module";
 import { TeamsModule } from "./teams/teams.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { ActivityModule } from "./activity/activity.module";
-
+import { AuditLogsModule } from "./audit-logs/audit-logs.module";
 @Module({
   imports: [
     TasksModule,
