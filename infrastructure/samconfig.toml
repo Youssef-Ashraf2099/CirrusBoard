@@ -1,0 +1,40 @@
+version = 0.1
+
+[default.global.parameters]
+region = "eu-north-1"
+
+[default.deploy.parameters]
+stack_name        = "cirrusboard-ALB"
+resolve_s3        = true
+s3_prefix         = "cirrusboard-ALB"
+confirm_changeset = false
+capabilities      = "CAPABILITY_IAM"
+disable_rollback  = true
+template          = "infrastructure/vpc-alb-asg.yaml"
+
+[dynamodb.deploy.parameters]
+stack_name        = "cirrusboard-dynamodb"
+resolve_s3        = true
+s3_prefix         = "cirrusboard-dynamodb"
+confirm_changeset = false
+capabilities      = "CAPABILITY_IAM"
+disable_rollback  = true
+template          = "infrastructure/dynamodb-tables.yaml"
+
+[s3lambda.deploy.parameters]
+stack_name        = "cirrusboard-s3-lambda"
+resolve_s3        = true
+s3_prefix         = "cirrusboard-s3-lambda"
+confirm_changeset = false
+capabilities      = "CAPABILITY_IAM"
+disable_rollback  = true
+template          = "infrastructure/s3-lambda-sam.yaml"
+
+[messaging.deploy.parameters]
+stack_name        = "cirrusboard-messaging"
+resolve_s3        = true
+s3_prefix         = "cirrusboard-messaging"
+confirm_changeset = false
+capabilities      = "CAPABILITY_IAM"
+disable_rollback  = true
+template          = "infrastructure/messaging-worker-sam.yaml"
