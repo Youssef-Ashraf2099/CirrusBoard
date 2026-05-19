@@ -3,6 +3,7 @@ import { TasksService } from "./tasks.service";
 import { TasksController } from "./tasks.controller";
 import { TasksRepository } from "./tasks.repository";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { createSharedDynamoDBClient } from "../common/dynamo-client.factory";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { S3Module } from "../integrations/s3/s3.module";
 import { LambdaModule } from "../integrations/lambda/lambda.module";
@@ -11,13 +12,8 @@ import { AuditLogsModule } from "../audit-logs/audit-logs.module";
 
 const dynamoClientProvider = {
   provide: "DYNAMO_CLIENT",
-  useFactory: () => {
-    const client = new DynamoDBClient({
-      region: process.env.AWS_REGION || "us-east-1",
-      endpoint: process.env.DYNAMODB_ENDPOINT,
-    });
-    return DynamoDBDocumentClient.from(client);
-  },
+  useFactory: () =>
+    DynamoDBDocumentClient.from(createSharedDynamoDBClient()),
 };
 
 const tableNameProvider = {

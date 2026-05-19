@@ -6,6 +6,7 @@ import {
   UpdateCommand,
   DeleteCommand,
   QueryCommand,
+  ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { UserItem } from "./users.model";
 import { v4 as uuidv4 } from "uuid";
@@ -37,8 +38,14 @@ export class UsersRepository {
       updatedAt: now,
     } as UserItem;
 
+    const marshallable = Object.fromEntries(
+      Object.entries(item as unknown as Record<string, unknown>).filter(
+        ([, v]) => v !== undefined,
+      ),
+    );
+
     await this.client.send(
-      new PutCommand({ TableName: this.tableName, Item: item }) as any,
+      new PutCommand({ TableName: this.tableName, Item: marshallable }) as any,
     );
     return item;
   }
@@ -104,6 +111,29 @@ export class UsersRepository {
       }) as any,
     );
     return (res as any).Attributes as UserItem;
+  }
+
+  async findUserByEmail(email: string): Promise<UserItem | null> {
+    const res = await this.client.send(
+      new ScanCommand({
+        TableName: this.tableName,
+        FilterExpression: "email = :e",
+        ExpressionAttributeValues: { ":e": email },
+        Limit: 50,
+      }) as any,
+    );
+    const items = ((res as any).Items ?? []) as UserItem[];
+    return items[0] ?? null;
+  }
+
+  async scanUsers(limit = 500): Promise<UserItem[]> {
+    const res = await this.client.send(
+      new ScanCommand({
+        TableName: this.tableName,
+        Limit: limit,
+      }) as any,
+    );
+    return ((res as any).Items ?? []) as UserItem[];
   }
 
   async deleteUser(userId: string): Promise<void> {

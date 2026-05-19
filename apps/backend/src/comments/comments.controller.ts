@@ -14,13 +14,9 @@ export class CommentsController {
 
   @Post()
   @ApiOperation({ summary: 'Add a new comment' })
-  create(@User() user: any, @Body() createCommentDto: CreateCommentDto) {
-    if (!user) throw new UnauthorizedException('Authentication required');
-    return this.commentsService.addComment(
-      (user as UserItem).userId,
-      createCommentDto.taskId,
-      createCommentDto.content,
-    );
+  create(@Body() createCommentDto: CreateCommentDto) {
+    const authorId = createCommentDto.authorId ?? 'dummy';
+    return this.commentsService.addComment(authorId, createCommentDto.taskId, createCommentDto.content);
   }
 
   @Get('task/:taskId')

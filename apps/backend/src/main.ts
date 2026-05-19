@@ -1,3 +1,4 @@
+import "dotenv/config";
 import "./config/load-env";
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
@@ -7,6 +8,10 @@ import { ValidationPipe } from "@nestjs/common";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN?.split(",") ?? true,
+    credentials: true,
+  });
   app.setGlobalPrefix("api");
 
   const config = new DocumentBuilder()

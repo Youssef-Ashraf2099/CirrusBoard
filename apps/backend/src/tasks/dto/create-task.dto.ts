@@ -40,4 +40,6 @@ export class CreateTaskDto {
   @IsOptional()
   @IsArray()
   attachments?: Attachment[];
+  @ApiProperty({ required: false, type: [String] })
+  tags?: string[];
 }
