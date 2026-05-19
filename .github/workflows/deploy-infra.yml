@@ -1,0 +1,95 @@
+name: deploy-infra
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION || 'eu-north-1' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install backend dependencies
+        working-directory: apps/backend
+        run: npm ci
+
+      - name: Deploy DynamoDB tables
+        run: |
+          sam deploy \
+            --stack-name cirrusboard-dynamodb \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --capabilities CAPABILITY_IAM \
+            -t infrastructure/dynamodb-tables.yaml
+
+      - name: Build backend
+        working-directory: apps/backend
+        run: npm run build
+
+      - name: Deploy VPC/ALB/ASG
+        run: |
+          sam build -t infrastructure/vpc-alb-asg.yaml
+          sam deploy \
+            --stack-name cirrusboard-vpc \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --capabilities CAPABILITY_IAM \
+            -t infrastructure/vpc-alb-asg.yaml
+
+      - name: Fetch ALB DNS
+        id: alb
+        run: |
+          ALB_DNS=$(aws cloudformation describe-stacks \
+            --stack-name cirrusboard-vpc \
+            --query "Stacks[0].Outputs[?OutputKey=='AlbDnsName'].OutputValue" \
+            --output text)
+          echo "alb_dns=$ALB_DNS" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy S3 resize
+        run: |
+          sam build -t infrastructure/s3-lambda-sam.yaml
+          sam deploy \
+            --stack-name cirrusboard-s3-lambda \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --capabilities CAPABILITY_IAM \
+            -t infrastructure/s3-lambda-sam.yaml
+
+      - name: Deploy messaging worker
+        run: |
+          sam build -t infrastructure/messaging-worker-sam.yaml
+          sam deploy \
+            --stack-name cirrusboard-messaging \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --capabilities CAPABILITY_IAM \
+            -t infrastructure/messaging-worker-sam.yaml
+
+      - name: Deploy CloudFront
+        run: |
+          sam build -t infrastructure/frontend-cdn-sam.yaml
+          sam deploy \
+            --stack-name cirrusboard-frontend-cdn \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --capabilities CAPABILITY_IAM \
+            -t infrastructure/frontend-cdn-sam.yaml \
+            --parameter-overrides OriginDomainName=${{ steps.alb.outputs.alb_dns }}

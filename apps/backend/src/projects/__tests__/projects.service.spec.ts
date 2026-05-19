@@ -16,7 +16,7 @@ describe("ProjectsService", () => {
   });
 
   it("allows manager to create project", async () => {
-    const actor: any = { userId: "ali", role: "Manager" };
+    const actor: any = { userId: "ali", role: "MANAGER" };
     (repo.createProject as jest.Mock).mockResolvedValue({
       projectId: "1",
       name: "x",

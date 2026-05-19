@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common";
 import { UsersRepository } from "./users.repository";
 import { UserItem } from "./users.model";
+import { CognitoClaims } from "../common/auth/cognito-auth.utils";
 
 export type PublicUser = Omit<UserItem, "password">;
 
@@ -46,6 +47,14 @@ export class UsersService {
     const u = await this.repo.getUserById(userId);
     if (!u) throw new NotFoundException("User not found");
     return sanitizeUser(u);
+  }
+
+  async syncFromCognitoClaims(claims: CognitoClaims): Promise<UserItem> {
+    return this.repo.upsertFromCognitoClaims(claims);
+  }
+
+  async findByCognitoSub(cognitoSub: string): Promise<UserItem | null> {
+    return this.repo.getUserByCognitoSub(cognitoSub);
   }
 
   async updateUser(

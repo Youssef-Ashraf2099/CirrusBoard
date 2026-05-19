@@ -27,6 +27,9 @@ AWS_ACCESS_KEY_ID=test
 AWS_SECRET_ACCESS_KEY=test
 AWS_REGION=us-east-1
 DYNAMODB_ENDPOINT=http://dynamodb:8000
+AWS_ENDPOINT=http://localstack:4566
+S3_ENDPOINT=http://localstack:4566
+S3_FORCE_PATH_STYLE=true
 USERS_TABLE=Users
 TEAMS_TABLE=Teams
 PROJECTS_TABLE=Projects
@@ -34,6 +37,9 @@ TASKS_TABLE=Tasks
 COMMENTS_TABLE=Comments
 TASK_AUDIT_LOGS_TABLE=TaskAuditLogs
 LOCALSTACK_ENDPOINT=http://localstack:4566
+COGNITO_USER_POOL_ID=local-pool
+COGNITO_USER_POOL_CLIENT_ID=local-client
+COGNITO_ISSUER=http://localstack:4566
 
 ```
 
@@ -95,6 +101,34 @@ cd apps/backend
 npm install
 npm run start:dev
 ```
+
+## Architecture (high availability)
+
+Diagram files:
+
+- Preview image: [docs/aws-arch-2.png](docs/aws-arch-2.png)
+- Source SVG: [docs/AWS Arch 2.svg](docs/AWS%20Arch%202.svg)
+
+High availability highlights (as reflected in the diagram):
+
+- Edge delivery with CloudFront in front of the app and static assets.
+- Compute tier behind an Application Load Balancer with autoscaling across multiple AZs.
+- DynamoDB and S3 provide multi-AZ storage for tasks and attachments.
+- Asynchronous workflows: S3 -> Lambda (image resize), SNS -> SQS -> worker Lambda, and EventBridge scheduled Lambdas for digests.
+- Cognito for authentication and CloudWatch for logs/metrics/alarms.
+
+Local development uses LocalStack to emulate S3/Lambda/SNS/SQS/EventBridge/Cognito and DynamoDB Local for tables.
+
+## Lambda image resize (sharp)
+
+The S3 image-resize Lambda handler uses `sharp`, which includes native binaries. If you package the Lambda locally, build it for Linux:
+
+```bash
+cd apps/backend
+npm install --platform=linux --arch=x64 --libc=glibc sharp
+```
+
+Alternatively, build inside a Linux container that matches the Lambda runtime.
 
 6. Useful commands
 
