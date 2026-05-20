@@ -6,11 +6,30 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
+import {
+  CognitoIdentityProviderClient,
+  InitiateAuthCommand,
+} from "@aws-sdk/client-cognito-identity-provider";
+import { createHmac } from "crypto";
 import { UsersRepository } from "./users.repository";
 import { UserItem } from "./users.model";
 import { CognitoClaims } from "../common/auth/cognito-auth.utils";
+import { CognitoConfig } from "../config/cognito.config";
 
 export type PublicUser = Omit<UserItem, "password">;
+
+export type CognitoLoginTokens = {
+  accessToken: string;
+  idToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  tokenType?: string;
+};
+
+export type LoginResponse = {
+  user: PublicUser;
+  tokens?: CognitoLoginTokens;
+};
 
 export function sanitizeUser(user: UserItem): PublicUser {
   const clone = { ...(user as UserItem) };
@@ -21,6 +40,10 @@ export function sanitizeUser(user: UserItem): PublicUser {
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
+  private readonly cognitoClient = new CognitoIdentityProviderClient({
+    region: CognitoConfig.region,
+    endpoint: process.env.COGNITO_ENDPOINT || undefined,
+  });
 
   constructor(private readonly repo: UsersRepository) {}
 
@@ -30,13 +53,15 @@ export class UsersService {
       return sanitizeUser(created);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`createUser failed: ${msg}`, err instanceof Error ? err.stack : undefined);
+      this.logger.error(
+        `createUser failed: ${msg}`,
+        err instanceof Error ? err.stack : undefined,
+      );
       throw new HttpException(
         {
           statusCode: HttpStatus.SERVICE_UNAVAILABLE,
           message: msg,
-          hint:
-            'DynamoDB rejected the write. Ensure a table exists with partition key "PK" (string). Check USERS_TABLE, AWS_REGION, credentials, or DYNAMODB_ENDPOINT (LocalStack uses dummy keys automatically).',
+          hint: 'DynamoDB rejected the write. Ensure a table exists with partition key "PK" (string). Check USERS_TABLE, AWS_REGION, credentials, or DYNAMODB_ENDPOINT (LocalStack uses dummy keys automatically).',
         },
         HttpStatus.SERVICE_UNAVAILABLE,
       );
@@ -80,10 +105,85 @@ export class UsersService {
     return sanitizeUser(u);
   }
 
+  async login(email: string, password: string): Promise<LoginResponse> {
+    if (CognitoConfig.userPoolClientId && CognitoConfig.userPoolId) {
+      try {
+        const tokens = await this.authenticateWithCognito(email, password);
+        const claims = decodeJwtPayload(tokens.idToken);
+        const synced = await this.syncFromCognitoClaims(claims);
+        return { user: sanitizeUser(synced), tokens };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`Cognito login failed, falling back to local: ${msg}`);
+      }
+    }
+
+    const user = await this.validateLogin(email, password);
+    return { user };
+  }
+
+  private async authenticateWithCognito(
+    email: string,
+    password: string,
+  ): Promise<CognitoLoginTokens> {
+    if (!CognitoConfig.userPoolClientId) {
+      throw new UnauthorizedException("Cognito client ID is missing");
+    }
+
+    const authParams: Record<string, string> = {
+      USERNAME: email.trim(),
+      PASSWORD: password,
+    };
+
+    const secretHash = this.buildSecretHash(authParams.USERNAME);
+    if (secretHash) authParams.SECRET_HASH = secretHash;
+
+    const command = new InitiateAuthCommand({
+      AuthFlow: "USER_PASSWORD_AUTH",
+      ClientId: CognitoConfig.userPoolClientId,
+      AuthParameters: authParams,
+    });
+
+    const response = await this.cognitoClient.send(command);
+    if (response.ChallengeName) {
+      throw new UnauthorizedException("Cognito challenge required");
+    }
+
+    const result = response.AuthenticationResult;
+    if (!result?.AccessToken || !result?.IdToken) {
+      throw new UnauthorizedException("Cognito authentication failed");
+    }
+
+    return {
+      accessToken: result.AccessToken,
+      idToken: result.IdToken,
+      refreshToken: result.RefreshToken,
+      expiresIn: result.ExpiresIn,
+      tokenType: result.TokenType,
+    };
+  }
+
+  private buildSecretHash(username: string): string | undefined {
+    const secret = process.env.COGNITO_USER_POOL_CLIENT_SECRET;
+    if (!secret || !CognitoConfig.userPoolClientId) return undefined;
+    return createHmac("sha256", secret)
+      .update(`${username}${CognitoConfig.userPoolClientId}`)
+      .digest("base64");
+  }
+
   async listUsers(teamId?: string): Promise<PublicUser[]> {
     const items = teamId
       ? await this.repo.queryUsersByTeam(teamId)
       : await this.repo.scanUsers();
     return items.map((u) => sanitizeUser(u));
   }
+}
+
+function decodeJwtPayload(token: string): CognitoClaims {
+  const payload = token.split(".")[1];
+  if (!payload) return {};
+  const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  const json = Buffer.from(padded, "base64").toString("utf8");
+  return JSON.parse(json) as CognitoClaims;
 }
