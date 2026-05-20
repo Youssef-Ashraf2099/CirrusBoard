@@ -10,7 +10,10 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import { UserItem } from "./users.model";
 import { v4 as uuidv4 } from "uuid";
-import { CognitoClaims, buildCognitoUserItem } from "../common/auth/cognito-auth.utils";
+import {
+  CognitoClaims,
+  buildCognitoUserItem,
+} from "../common/auth/cognito-auth.utils";
 
 @Injectable()
 export class UsersRepository {
@@ -63,7 +66,16 @@ export class UsersRepository {
   }
 
   async upsertFromCognitoClaims(claims: CognitoClaims): Promise<UserItem> {
-    const existing = await this.getUserByCognitoSub(String(claims.sub || ""));
+    // First try by cognitoSub
+    let existing = await this.getUserByCognitoSub(String(claims.sub || ""));
+
+    // If not found by cognitoSub, try by email (user existed before Cognito)
+    if (!existing && claims.email) {
+      existing = await this.findUserByEmail(
+        String(claims.email).trim().toLowerCase(),
+      );
+    }
+
     const item = buildCognitoUserItem(claims, existing);
 
     await this.client.send(
