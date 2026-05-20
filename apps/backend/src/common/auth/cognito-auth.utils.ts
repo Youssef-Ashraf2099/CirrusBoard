@@ -35,7 +35,8 @@ export function normalizeRole(value: unknown): UserRole {
 
 function parseCsvOrJsonArray(value: unknown): string[] {
   if (!value) return [];
-  if (Array.isArray(value)) return value.map((item) => String(item)).filter(Boolean);
+  if (Array.isArray(value))
+    return value.map((item) => String(item)).filter(Boolean);
 
   const raw = String(value).trim();
   if (!raw) return [];
@@ -71,7 +72,9 @@ export function normalizeTeamIds(claims: CognitoClaims): string[] {
   return [...new Set(teamIds.map((teamId) => String(teamId)).filter(Boolean))];
 }
 
-export function normalizePrimaryTeamId(claims: CognitoClaims): string | undefined {
+export function normalizePrimaryTeamId(
+  claims: CognitoClaims,
+): string | undefined {
   const primaryTeamId = claims["custom:teamId"] || claims.teamId;
   return primaryTeamId ? String(primaryTeamId) : undefined;
 }
@@ -94,10 +97,9 @@ export function hasTeamAccess(
   if (actor.role === "MANAGER" || actor.role === "ADMIN") return true;
   if (!teamId) return false;
 
-  const accessibleTeams = new Set([
-    actor.primaryTeamId,
-    ...(actor.teamIds ?? []),
-  ].filter(Boolean));
+  const accessibleTeams = new Set(
+    [actor.primaryTeamId, ...(actor.teamIds ?? [])].filter(Boolean),
+  );
 
   return accessibleTeams.has(teamId);
 }
@@ -118,8 +120,14 @@ export function buildCognitoUserItem(
   }
 
   const now = new Date().toISOString();
-  const role = normalizeRole(claims["cognito:groups"] ?? existing?.role);
-  const primaryTeamId = normalizePrimaryTeamId(claims) ?? existing?.primaryTeamId;
+
+  // ← FIX: prefer existing DB role, only use Cognito groups as fallback
+  const role = existing?.role
+    ? existing.role
+    : normalizeRole(claims["cognito:groups"]);
+
+  const primaryTeamId =
+    normalizePrimaryTeamId(claims) ?? existing?.primaryTeamId;
   const teamIds = normalizeTeamIds(claims);
   if (primaryTeamId && !teamIds.includes(primaryTeamId)) {
     teamIds.unshift(primaryTeamId);
@@ -130,7 +138,7 @@ export function buildCognitoUserItem(
     userId: existing?.userId ?? cognitoSub,
     email: String(claims.email ?? existing?.email ?? "").trim(),
     name: normalizeDisplayName(claims) || existing?.name || cognitoSub,
-    role,
+    role, // ← uses existing DB role
     password: existing?.password,
     primaryTeamId,
     teamIds,
