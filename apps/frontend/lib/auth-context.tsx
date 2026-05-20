@@ -96,6 +96,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       const result = await api.login(email, password);
+
+      console.log("LOGIN RESULT:", JSON.stringify(result, null, 2)); // ADD THIS
+
       setUser(result.user);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(result.user));
       if (result.tokens?.accessToken || result.tokens?.idToken) {
