@@ -6,16 +6,17 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
-import {
-  CognitoIdentityProviderClient,
-  InitiateAuthCommand,
-} from "@aws-sdk/client-cognito-identity-provider";
 import { createHmac } from "crypto";
 import { UsersRepository } from "./users.repository";
 import { UserItem } from "./users.model";
 import { CognitoClaims } from "../common/auth/cognito-auth.utils";
 import { CognitoConfig } from "../config/cognito.config";
-
+import {
+  CognitoIdentityProviderClient,
+  InitiateAuthCommand,
+  AdminCreateUserCommand,
+  AdminSetUserPasswordCommand,
+} from "@aws-sdk/client-cognito-identity-provider";
 export type PublicUser = Omit<UserItem, "password">;
 
 export type CognitoLoginTokens = {
@@ -49,23 +50,60 @@ export class UsersService {
 
   async createUser(input: Partial<UserItem>): Promise<PublicUser> {
     try {
+      // 1. Create in your DB first
       const created = await this.repo.createUser(input);
+
+      // 2. Also create in Cognito (don't fail the whole request if this errors)
+      if (input.email && input.password) {
+        await this.createCognitoUser(input.email, input.password).catch(
+          (err) => {
+            this.logger.warn(
+              `Cognito user creation failed for ${input.email}: ${err.message}`,
+            );
+          },
+        );
+      }
+
       return sanitizeUser(created);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(
-        `createUser failed: ${msg}`,
-        err instanceof Error ? err.stack : undefined,
-      );
+      this.logger.error(`createUser failed: ${msg}`);
       throw new HttpException(
         {
           statusCode: HttpStatus.SERVICE_UNAVAILABLE,
           message: msg,
-          hint: 'DynamoDB rejected the write. Ensure a table exists with partition key "PK" (string). Check USERS_TABLE, AWS_REGION, credentials, or DYNAMODB_ENDPOINT (LocalStack uses dummy keys automatically).',
         },
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
+  }
+
+  private async createCognitoUser(
+    email: string,
+    password: string,
+  ): Promise<void> {
+    if (!CognitoConfig.userPoolId || !CognitoConfig.userPoolClientId) return;
+
+    // Step 1: admin-create-user
+    await this.cognitoClient.send(
+      new AdminCreateUserCommand({
+        UserPoolId: CognitoConfig.userPoolId,
+        Username: email,
+        MessageAction: "SUPPRESS",
+      }),
+    );
+
+    // Step 2: set permanent password immediately
+    await this.cognitoClient.send(
+      new AdminSetUserPasswordCommand({
+        UserPoolId: CognitoConfig.userPoolId,
+        Username: email,
+        Password: password,
+        Permanent: true,
+      }),
+    );
+
+    this.logger.log(`Cognito user created: ${email}`);
   }
 
   async getUser(userId: string): Promise<PublicUser> {
@@ -87,6 +125,23 @@ export class UsersService {
     updates: Partial<UserItem>,
   ): Promise<PublicUser> {
     const updated = await this.repo.updateUser(userId, updates);
+
+    // Sync new password to Cognito if it changed
+    if (updates.password && updated.email) {
+      await this.cognitoClient
+        .send(
+          new AdminSetUserPasswordCommand({
+            UserPoolId: CognitoConfig.userPoolId,
+            Username: updated.email,
+            Password: updates.password,
+            Permanent: true,
+          }),
+        )
+        .catch((err) => {
+          this.logger.warn(`Cognito password sync failed: ${err.message}`);
+        });
+    }
+
     return sanitizeUser(updated);
   }
 
