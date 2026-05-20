@@ -45,6 +45,26 @@ export class ApiError extends Error {
   }
 }
 
+type LoginTokens = {
+  accessToken: string;
+  idToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  tokenType?: string;
+};
+
+type LoginResponse =
+  | ApiUser
+  | {
+      user: ApiUser;
+      tokens?: LoginTokens;
+    };
+
+export type LoginResult = {
+  user: User;
+  tokens?: LoginTokens;
+};
+
 function getStoredCognitoToken(): string | null {
   if (typeof window === "undefined") return null;
   const direct =
@@ -132,12 +152,22 @@ function buildUserMap(users: User[]) {
 }
 
 export const api = {
-  async login(email: string, password: string): Promise<User> {
-    const raw = await request<ApiUser>("/api/users/login", {
+  async login(email: string, password: string): Promise<LoginResult> {
+    const raw = await request<LoginResponse>("/api/users/login", {
       method: "POST",
       json: { email, password },
     });
-    return mapApiUserToUser(raw);
+    const payload =
+      typeof raw === "object" && raw !== null && "user" in raw
+        ? (raw as { user: ApiUser; tokens?: LoginTokens })
+        : ({ user: raw as ApiUser } satisfies {
+            user: ApiUser;
+            tokens?: LoginTokens;
+          });
+    return {
+      user: mapApiUserToUser(payload.user),
+      tokens: payload.tokens,
+    };
   },
 
   async listUsers(teamId?: string): Promise<User[]> {
