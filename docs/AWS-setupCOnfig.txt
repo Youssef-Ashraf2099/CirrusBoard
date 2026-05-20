@@ -19,3 +19,8 @@ bashsudo dnf remove -y nodejs
 curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
 sudo dnf install -y nodejs
 node --version
+
+
+ aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names cirrusboard-ALB-BackendAutoScalingGroup-5UPoPjzeC50Y --query "AutoScalingGroups[0].Instances[0].InstanceId" --output text --region eu-north-1
+
+ aws ssm start-session --target OUTPUT el Command ellyFO2 --region eu-north-1
