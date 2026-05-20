@@ -1,0 +1,21 @@
+sudo git clone https://ghp_xxxxxxxxxxxx@github.com/johndoe/cirrusboard.git /app
+
+
+sudo chown -R $(whoami) /app
+curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+sudo dnf install -y nodejs
+node --version
+
+
+cd /app/apps/frontend
+npm install
+npm run build
+npm start -- -p 3000
+
+
+
+The nodesource setup didn't take effect. Run this to force install Node 20:
+bashsudo dnf remove -y nodejs
+curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+sudo dnf install -y nodejs
+node --version
