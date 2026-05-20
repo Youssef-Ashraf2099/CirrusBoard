@@ -64,7 +64,9 @@ export class CognitoAuthGuard implements CanActivate {
       req?.method === "OPTIONS" ||
       path.startsWith("/api/docs") ||
       path === "/api/docs-json" ||
-      path === "/api/docs-yaml"
+      path === "/api/docs-yaml" ||
+      (path === "/api/users" && req?.method === "POST") ||
+      path.startsWith("/api/users/login")
     ) {
       return true;
     }
