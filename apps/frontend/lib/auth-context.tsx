@@ -120,15 +120,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ) => {
     setIsLoading(true);
     try {
-      const u = await api.createUser({
+      // 1. Create user in DB + Cognito
+      await api.createUser({
         name,
         email,
         password,
         role: mapUiRoleToApi(role),
         primaryTeamId: DEFAULT_TEAM_ID,
       });
-      setUser(u);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+
+      // 2. Login to get Cognito tokens
+      const result = await api.login(email, password);
+      setUser(result.user);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(result.user));
+      if (result.tokens?.accessToken || result.tokens?.idToken) {
+        storeTokens(result.tokens);
+      }
       router.push("/dashboard");
     } finally {
       setIsLoading(false);

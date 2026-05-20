@@ -50,18 +50,17 @@ export class UsersService {
 
   async createUser(input: Partial<UserItem>): Promise<PublicUser> {
     try {
-      // 1. Create in your DB first
+      const plainPassword = input.password; // capture before anything touches it
+      const plainEmail = input.email?.trim().toLowerCase();
+
       const created = await this.repo.createUser(input);
 
-      // 2. Also create in Cognito (don't fail the whole request if this errors)
-      if (input.email && input.password) {
-        await this.createCognitoUser(input.email, input.password).catch(
-          (err) => {
-            this.logger.warn(
-              `Cognito user creation failed for ${input.email}: ${err.message}`,
-            );
-          },
-        );
+      if (plainEmail && plainPassword) {
+        await this.createCognitoUser(plainEmail, plainPassword).catch((err) => {
+          this.logger.warn(
+            `Cognito user creation failed for ${plainEmail}: ${err.message}`,
+          );
+        });
       }
 
       return sanitizeUser(created);
@@ -69,10 +68,7 @@ export class UsersService {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`createUser failed: ${msg}`);
       throw new HttpException(
-        {
-          statusCode: HttpStatus.SERVICE_UNAVAILABLE,
-          message: msg,
-        },
+        { statusCode: HttpStatus.SERVICE_UNAVAILABLE, message: msg },
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
