@@ -30,6 +30,6 @@ node --version
 
 
 
-cd /app/apps/frontend
+cd /app/apps/frontend  #useed one
 /appBack/apps/frontend/
-/appBack/apps/backend/
+/appBack/apps/backend/  #used one

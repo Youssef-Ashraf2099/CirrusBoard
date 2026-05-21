@@ -56,7 +56,8 @@ function getStoredTokens() {
     localStorage.getItem(ACCESS_TOKEN_KEY) ||
     localStorage.getItem(LEGACY_ACCESS_TOKEN_KEY);
   const idToken =
-    localStorage.getItem(ID_TOKEN_KEY) || localStorage.getItem(LEGACY_ID_TOKEN_KEY);
+    localStorage.getItem(ID_TOKEN_KEY) ||
+    localStorage.getItem(LEGACY_ID_TOKEN_KEY);
   const refreshToken =
     localStorage.getItem(REFRESH_TOKEN_KEY) ||
     localStorage.getItem(LEGACY_REFRESH_TOKEN_KEY);
