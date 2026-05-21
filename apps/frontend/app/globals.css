@@ -4,80 +4,67 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* New Neon Color Palette */
-  --background: #050816;
-  --surface: #111827;
-  --card: #1a1f35;
-  --card-foreground: #f8fafc;
-  --foreground: #f8fafc;
-  --popover: #111827;
-  --popover-foreground: #f8fafc;
-  
-  /* Cyan Glow - Primary */
-  --primary: #00E5FF;
-  --primary-foreground: #050816;
-  
-  /* Violet Glow */
-  --accent: #7C3AED;
+  /* Light theme (default when html has no .dark class) */
+  --background: #f1f5f9;
+  --surface: #ffffff;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  --primary: #0891b2;
+  --primary-foreground: #f8fafc;
+
+  --accent: #6d28d9;
   --accent-foreground: #f8fafc;
-  
-  /* Pink Accent */
-  --pink: #EC4899;
+
+  --pink: #db2777;
   --pink-foreground: #f8fafc;
-  
-  /* Secondary */
-  --secondary: #111827;
-  --secondary-foreground: #f8fafc;
-  
-  /* Muted */
-  --muted: #1a1f35;
-  --muted-foreground: #94a3b8;
-  
-  /* Lime Success */
-  --success: #84CC16;
-  --success-foreground: #050816;
-  
-  /* Warning */
-  --warning: #F59E0B;
-  --warning-foreground: #050816;
-  
-  /* Destructive */
-  --destructive: #EF4444;
+
+  --secondary: #e2e8f0;
+  --secondary-foreground: #0f172a;
+
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+
+  --success: #65a30d;
+  --success-foreground: #f8fafc;
+
+  --warning: #d97706;
+  --warning-foreground: #0f172a;
+
+  --destructive: #dc2626;
   --destructive-foreground: #f8fafc;
-  
-  /* Text */
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  
-  /* Borders and inputs */
-  --border: #1a1f35;
-  --input: #111827;
-  --ring: #00E5FF;
-  
-  /* Chart colors - neon palette */
-  --chart-1: #00E5FF;
-  --chart-2: #7C3AED;
-  --chart-3: #84CC16;
-  --chart-4: #EC4899;
-  --chart-5: #F59E0B;
-  
+
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+
+  --border: #cbd5e1;
+  --input: #e2e8f0;
+  --ring: #0891b2;
+
+  --chart-1: #0891b2;
+  --chart-2: #6d28d9;
+  --chart-3: #65a30d;
+  --chart-4: #db2777;
+  --chart-5: #d97706;
+
   --radius: 0.75rem;
-  
-  /* Sidebar */
-  --sidebar: #050816;
-  --sidebar-foreground: #f8fafc;
-  --sidebar-primary: #00E5FF;
-  --sidebar-primary-foreground: #050816;
-  --sidebar-accent: #1a1f35;
-  --sidebar-accent-foreground: #f8fafc;
-  --sidebar-border: #1a1f35;
-  --sidebar-ring: #00E5FF;
-  
-  /* Neon glow colors */
-  --glow-cyan: rgba(0, 229, 255, 0.5);
-  --glow-violet: rgba(124, 58, 237, 0.5);
-  --glow-pink: rgba(236, 72, 153, 0.5);
-  --glow-lime: rgba(132, 204, 22, 0.5);
+
+  --sidebar: #f8fafc;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #0891b2;
+  --sidebar-primary-foreground: #f8fafc;
+  --sidebar-accent: #e2e8f0;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #cbd5e1;
+  --sidebar-ring: #0891b2;
+
+  --glow-cyan: rgba(8, 145, 178, 0.25);
+  --glow-violet: rgba(109, 40, 217, 0.2);
+  --glow-pink: rgba(219, 39, 119, 0.2);
+  --glow-lime: rgba(101, 163, 13, 0.2);
 }
 
 .dark {
@@ -184,16 +171,20 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #050816;
+  background: var(--background);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1a1f35;
+  background: var(--muted);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #7C3AED;
+  background: var(--accent);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #1a1f35;
 }
 
 /* Strong Neon Border Effect */

@@ -11,6 +11,7 @@ export function Providers({ children }: { children: ReactNode }) {
       attribute="class"
       defaultTheme="system"
       enableSystem
+      storageKey="taskflow-theme"
       disableTransitionOnChange
     >
       <AuthProvider>

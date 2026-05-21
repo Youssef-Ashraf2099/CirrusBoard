@@ -137,13 +137,15 @@ export function buildCognitoUserItem(
     PK: existing?.PK ?? `USER#${cognitoSub}`,
     userId: existing?.userId ?? cognitoSub,
     email: String(
-      claims.email ||
-        existing?.email ||
+      existing?.email ||
+        claims.email ||
         claims.preferred_username ||
         claims.username ||
         cognitoSub,
-    ).trim(),
-    name: normalizeDisplayName(claims) || existing?.name || cognitoSub,
+    )
+      .trim()
+      .toLowerCase(),
+    name: existing?.name?.trim() || normalizeDisplayName(claims) || cognitoSub,
     role, // ← uses existing DB role
     password: existing?.password,
     primaryTeamId,
