@@ -621,6 +621,16 @@ export const api = {
     return request<ApiTask>(`/api/tasks/${encodeURIComponent(id)}`);
   },
 
+  /** Full task for detail view (assignee, attachments, comment count). */
+  async getTaskWithMeta(taskId: string): Promise<Task> {
+    const [raw, comments] = await Promise.all([
+      this.getTask(taskId),
+      this.listComments(taskId).catch(() => []),
+    ]);
+    const users = await this.listUsers().catch(() => []);
+    return mapApiTaskToTask(raw, buildUserMap(users), comments.length);
+  },
+
   async createTask(fields: {
     title: string;
     description: string;

@@ -64,6 +64,28 @@ export default function KanbanPage() {
     }
   }
 
+  const openTaskDetail = useCallback(async (task: Task) => {
+    try {
+      const full = await api.getTaskWithMeta(task.id)
+      setSelectedTask(full)
+      setModalOpen(true)
+    } catch {
+      setSelectedTask(task)
+      setModalOpen(true)
+    }
+  }, [])
+
+  const syncSelectedTask = useCallback(async () => {
+    if (!selectedTask?.id || !modalOpen) return
+    try {
+      const full = await api.getTaskWithMeta(selectedTask.id)
+      setSelectedTask(full)
+      setTasks((prev) => prev.map((t) => (t.id === full.id ? full : t)))
+    } catch {
+      /* keep current selection */
+    }
+  }, [selectedTask?.id, modalOpen])
+
   return (
     <>
       <motion.div
@@ -135,10 +157,7 @@ export default function KanbanPage() {
               search: searchQuery,
               projectId: selectedProject,
             }}
-            onTaskClick={(t) => {
-              setSelectedTask(t)
-              setModalOpen(true)
-            }}
+            onTaskClick={(t) => void openTaskDetail(t)}
             onTaskStatusPersist={persistStatus}
           />
         )}
@@ -150,8 +169,14 @@ export default function KanbanPage() {
         currentUser={user}
         open={modalOpen}
         onOpenChange={setModalOpen}
-        onCommentsChanged={() => void reload()}
-        onTaskUpdated={() => void reload()}
+        onCommentsChanged={() => {
+          void reload()
+          void syncSelectedTask()
+        }}
+        onTaskUpdated={() => {
+          void reload()
+          void syncSelectedTask()
+        }}
       />
 
       <TaskFormModal
@@ -161,6 +186,11 @@ export default function KanbanPage() {
         users={members}
         teamId={teamId}
         onSaved={() => void reload()}
+        onTaskCreated={async (created) => {
+          await reload()
+          setSelectedTask(created)
+          setModalOpen(true)
+        }}
       />
     </>
   )
