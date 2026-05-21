@@ -2,6 +2,7 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from "@nestjs/common";
 import { CognitoConfig } from "../../config/cognito.config";
@@ -23,6 +24,7 @@ try {
 
 @Injectable()
 export class CognitoAuthGuard implements CanActivate {
+  private readonly logger = new Logger(CognitoAuthGuard.name);
   private accessTokenVerifier: any | null = null;
   private idTokenVerifier: any | null = null;
   private initError: string | null = null;
@@ -53,7 +55,8 @@ export class CognitoAuthGuard implements CanActivate {
         issuer,
       });
     } catch (error: any) {
-      this.initError = error?.message || "Failed to initialize Cognito verifier";
+      this.initError =
+        error?.message || "Failed to initialize Cognito verifier";
     }
   }
 
@@ -73,12 +76,30 @@ export class CognitoAuthGuard implements CanActivate {
     }
 
     const auth = req.headers?.authorization || req.headers?.Authorization;
+    const fallbackToken = req.headers?.["x-cognito-access-token"];
     let token: string;
+    const tokenSource = auth
+      ? "authorization"
+      : fallbackToken
+        ? "x-cognito-access-token"
+        : "missing";
+
+    this.logger.debug(
+      `auth check path=${path} method=${req?.method || "UNKNOWN"} source=${tokenSource} hasAuth=${Boolean(auth)} hasFallback=${Boolean(fallbackToken)}`,
+    );
 
     try {
-      token = extractBearerToken(auth);
+      if (auth) {
+        token = extractBearerToken(auth);
+      } else if (fallbackToken) {
+        token = Array.isArray(fallbackToken) ? fallbackToken[0] : fallbackToken;
+      } else {
+        throw new Error("Missing Authorization header");
+      }
     } catch (error: any) {
-      throw new UnauthorizedException(error.message || "Missing Authorization header");
+      throw new UnauthorizedException(
+        error.message || "Missing Authorization header",
+      );
     }
 
     if (!this.accessTokenVerifier || !this.idTokenVerifier) {
@@ -92,8 +113,14 @@ export class CognitoAuthGuard implements CanActivate {
       let payload: Record<string, any>;
       try {
         payload = await this.accessTokenVerifier.verify(token);
+        this.logger.debug(
+          `verified access token for sub=${String(payload.sub || "")}`,
+        );
       } catch {
         payload = await this.idTokenVerifier.verify(token);
+        this.logger.debug(
+          `verified id token for sub=${String(payload.sub || "")}`,
+        );
       }
 
       const user = await this.usersService.syncFromCognitoClaims(payload);
@@ -104,8 +131,14 @@ export class CognitoAuthGuard implements CanActivate {
       };
 
       req.user = authenticatedUser;
+      this.logger.debug(
+        `attached userId=${authenticatedUser.userId} cognitoSub=${authenticatedUser.cognitoSub} path=${path}`,
+      );
       return true;
     } catch (err) {
+      this.logger.warn(
+        `token verification failed path=${path} source=${tokenSource} reason=${err instanceof Error ? err.message : String(err)}`,
+      );
       throw new UnauthorizedException("Invalid or expired token");
     }
   }

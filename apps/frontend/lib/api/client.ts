@@ -124,7 +124,9 @@ function getStoredCognitoToken(): string | null {
     const lastAuthUser = localStorage.getItem(lastAuthUserKey);
     const prefix = lastAuthUserKey.replace(/\.LastAuthUser$/, "");
     if (lastAuthUser) {
-      const accessToken = localStorage.getItem(`${prefix}.${lastAuthUser}.accessToken`);
+      const accessToken = localStorage.getItem(
+        `${prefix}.${lastAuthUser}.accessToken`,
+      );
       if (accessToken) return accessToken;
       const idToken = localStorage.getItem(`${prefix}.${lastAuthUser}.idToken`);
       if (idToken) return idToken;
@@ -148,7 +150,11 @@ function getStoredCognitoToken(): string | null {
   return null;
 }
 
-function readStoredUser(): { id?: string; email?: string; name?: string } | null {
+function readStoredUser(): {
+  id?: string;
+  email?: string;
+  name?: string;
+} | null {
   if (typeof window === "undefined") return null;
 
   const raw = localStorage.getItem("taskflow_user");
@@ -247,6 +253,7 @@ async function request<T>(
     const nextHeaders = new Headers(resolvedHeaders);
     if (token && !nextHeaders.has("authorization")) {
       nextHeaders.set("authorization", `Bearer ${token}`);
+      nextHeaders.set("x-cognito-access-token", token);
     }
     return fetch(path, {
       ...rest,
@@ -336,7 +343,10 @@ export const api = {
       "/api/users",
       {
         method: "POST",
-        json: { ...input, primaryTeamId: input.primaryTeamId ?? DEFAULT_TEAM_ID },
+        json: {
+          ...input,
+          primaryTeamId: input.primaryTeamId ?? DEFAULT_TEAM_ID,
+        },
       },
       { allowRefresh: false },
     );
@@ -520,10 +530,13 @@ export const api = {
       endDate?: string;
     }>,
   ): Promise<Project> {
-    const raw = await request<ApiProject>(`/api/projects/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      json: patch,
-    });
+    const raw = await request<ApiProject>(
+      `/api/projects/${encodeURIComponent(id)}`,
+      {
+        method: "PATCH",
+        json: patch,
+      },
+    );
     return mapApiProjectToProject(raw);
   },
 
