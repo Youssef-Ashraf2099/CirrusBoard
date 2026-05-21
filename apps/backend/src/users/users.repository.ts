@@ -62,7 +62,19 @@ export class UsersRepository {
   }
 
   async getUserByCognitoSub(cognitoSub: string): Promise<UserItem | null> {
-    return this.getUserById(cognitoSub);
+    const byId = await this.getUserById(cognitoSub);
+    if (byId) return byId;
+
+    const res = await this.client.send(
+      new ScanCommand({
+        TableName: this.tableName,
+        FilterExpression: "cognitoSub = :cognitoSub",
+        ExpressionAttributeValues: { ":cognitoSub": cognitoSub },
+        Limit: 50,
+      }) as any,
+    );
+    const items = ((res as any).Items ?? []) as UserItem[];
+    return items[0] ?? null;
   }
 
   async upsertFromCognitoClaims(claims: CognitoClaims): Promise<UserItem> {
