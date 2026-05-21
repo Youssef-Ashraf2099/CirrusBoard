@@ -38,6 +38,7 @@ async function parseJson<T>(res: Response): Promise<T> {
 export class ApiError extends Error {
   status: number;
   body: unknown;
+
   constructor(status: number, message: string, body?: unknown) {
     super(message);
     this.status = status;
@@ -65,12 +66,53 @@ export type LoginResult = {
   tokens?: LoginTokens;
 };
 
+const ACCESS_TOKEN_KEYS = ["cognitoAccessToken", "accessToken", "idToken"];
+const REFRESH_TOKEN_KEYS = ["cognitoRefreshToken", "refreshToken"];
+
+function decodeJwtExpiry(token: string): number | null {
+  const parts = token.split(".");
+  if (parts.length < 2) return null;
+
+  try {
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    const parsed = JSON.parse(atob(padded)) as { exp?: number };
+    return typeof parsed.exp === "number" ? parsed.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+function isJwtExpired(token: string): boolean {
+  const exp = decodeJwtExpiry(token);
+  if (!exp) return false;
+  return Date.now() >= exp * 1000 - 30_000;
+}
+
+function readTokenFromKeys(keys: string[]): string | null {
+  if (typeof window === "undefined") return null;
+
+  for (const key of keys) {
+    const token = localStorage.getItem(key);
+    if (token && !isJwtExpired(token)) {
+      return token;
+    }
+  }
+
+  for (const key of keys) {
+    const token = localStorage.getItem(key);
+    if (token) {
+      return token;
+    }
+  }
+
+  return null;
+}
+
 function getStoredCognitoToken(): string | null {
   if (typeof window === "undefined") return null;
-  const direct =
-    localStorage.getItem("cognitoAccessToken") ||
-    localStorage.getItem("accessToken") ||
-    localStorage.getItem("idToken");
+
+  const direct = readTokenFromKeys(ACCESS_TOKEN_KEYS);
   if (direct) return direct;
 
   const lastAuthUserKey = Object.keys(localStorage).find(
@@ -82,11 +124,9 @@ function getStoredCognitoToken(): string | null {
     const lastAuthUser = localStorage.getItem(lastAuthUserKey);
     const prefix = lastAuthUserKey.replace(/\.LastAuthUser$/, "");
     if (lastAuthUser) {
-      const accessKey = `${prefix}.${lastAuthUser}.accessToken`;
-      const accessToken = localStorage.getItem(accessKey);
+      const accessToken = localStorage.getItem(`${prefix}.${lastAuthUser}.accessToken`);
       if (accessToken) return accessToken;
-      const idKey = `${prefix}.${lastAuthUser}.idToken`;
-      const idToken = localStorage.getItem(idKey);
+      const idToken = localStorage.getItem(`${prefix}.${lastAuthUser}.idToken`);
       if (idToken) return idToken;
     }
   }
@@ -108,28 +148,129 @@ function getStoredCognitoToken(): string | null {
   return null;
 }
 
+function readStoredUser(): { id?: string; email?: string; name?: string } | null {
+  if (typeof window === "undefined") return null;
+
+  const raw = localStorage.getItem("taskflow_user");
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as { id?: string; email?: string; name?: string };
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionTokens(tokens: LoginTokens) {
+  if (tokens.accessToken) {
+    localStorage.setItem("cognitoAccessToken", tokens.accessToken);
+    localStorage.setItem("accessToken", tokens.accessToken);
+  }
+  if (tokens.idToken) {
+    localStorage.setItem("cognitoIdToken", tokens.idToken);
+    localStorage.setItem("idToken", tokens.idToken);
+  }
+  if (tokens.refreshToken) {
+    localStorage.setItem("cognitoRefreshToken", tokens.refreshToken);
+    localStorage.setItem("refreshToken", tokens.refreshToken);
+  }
+}
+
+function clearSessionTokens() {
+  [
+    "cognitoAccessToken",
+    "accessToken",
+    "cognitoIdToken",
+    "idToken",
+    "cognitoRefreshToken",
+    "refreshToken",
+  ].forEach((key) => localStorage.removeItem(key));
+}
+
+function getStoredRefreshToken(): string | null {
+  return readTokenFromKeys(REFRESH_TOKEN_KEYS);
+}
+
+function getStoredEmail(): string | null {
+  const user = readStoredUser();
+  return user?.email?.trim().toLowerCase() || null;
+}
+
+async function refreshStoredSession(): Promise<LoginTokens | null> {
+  if (typeof window === "undefined") return null;
+
+  const email = getStoredEmail();
+  const refreshToken = getStoredRefreshToken();
+  if (!email || !refreshToken) return null;
+
+  const res = await fetch("/api/users/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, refreshToken }),
+    cache: "no-store",
+  });
+
+  if (!res.ok) return null;
+
+  const payload = (await parseJson<LoginResponse>(res)) as
+    | { user: ApiUser; tokens?: LoginTokens }
+    | ApiUser;
+
+  if (payload && typeof payload === "object" && "user" in payload) {
+    localStorage.setItem(
+      "taskflow_user",
+      JSON.stringify(mapApiUserToUser(payload.user)),
+    );
+    if (payload.tokens) {
+      writeSessionTokens(payload.tokens);
+      return payload.tokens;
+    }
+  }
+
+  return null;
+}
+
 async function request<T>(
   path: string,
   init?: RequestInit & { json?: unknown },
+  options?: { allowRefresh?: boolean },
 ): Promise<T> {
+  const allowRefresh = options?.allowRefresh ?? true;
   const { json, headers, ...rest } = init ?? {};
-  const body =
-    json !== undefined ? JSON.stringify(json) : (rest as RequestInit).body;
+  const body = json !== undefined ? JSON.stringify(json) : rest.body;
   const resolvedHeaders = new Headers(headers);
   if (json !== undefined && !resolvedHeaders.has("Content-Type")) {
     resolvedHeaders.set("Content-Type", "application/json");
   }
-  const token = getStoredCognitoToken();
-  if (token && !resolvedHeaders.has("authorization")) {
-    resolvedHeaders.set("authorization", `Bearer ${token}`);
+
+  const send = async (token?: string | null) => {
+    const nextHeaders = new Headers(resolvedHeaders);
+    if (token && !nextHeaders.has("authorization")) {
+      nextHeaders.set("authorization", `Bearer ${token}`);
+    }
+    return fetch(path, {
+      ...rest,
+      body,
+      headers: nextHeaders,
+      cache: "no-store",
+    });
+  };
+
+  let res = await send(getStoredCognitoToken());
+
+  if (
+    allowRefresh &&
+    res.status === 401 &&
+    typeof window !== "undefined" &&
+    path !== "/api/users/refresh"
+  ) {
+    const refreshed = await refreshStoredSession();
+    const refreshedToken = refreshed?.accessToken || refreshed?.idToken;
+    if (refreshedToken) {
+      res = await send(refreshedToken);
+    }
   }
 
-  const res = await fetch(path, {
-    ...rest,
-    body,
-    headers: resolvedHeaders,
-    cache: "no-store",
-  });
   if (!res.ok) {
     let errBody: unknown;
     try {
@@ -143,6 +284,7 @@ async function request<T>(
         : res.statusText;
     throw new ApiError(res.status, msg || "Request failed", errBody);
   }
+
   if (res.status === 204) return undefined as T;
   return parseJson<T>(res);
 }
@@ -153,10 +295,11 @@ function buildUserMap(users: User[]) {
 
 export const api = {
   async login(email: string, password: string): Promise<LoginResult> {
-    const raw = await request<LoginResponse>("/api/users/login", {
-      method: "POST",
-      json: { email, password },
-    });
+    const raw = await request<LoginResponse>(
+      "/api/users/login",
+      { method: "POST", json: { email, password } },
+      { allowRefresh: false },
+    );
     const payload =
       typeof raw === "object" && raw !== null && "user" in raw
         ? (raw as { user: ApiUser; tokens?: LoginTokens })
@@ -189,13 +332,14 @@ export const api = {
     primaryTeamId?: string;
     teamIds?: string[];
   }): Promise<User> {
-    const raw = await request<ApiUser>("/api/users", {
-      method: "POST",
-      json: {
-        ...input,
-        primaryTeamId: input.primaryTeamId ?? DEFAULT_TEAM_ID,
+    const raw = await request<ApiUser>(
+      "/api/users",
+      {
+        method: "POST",
+        json: { ...input, primaryTeamId: input.primaryTeamId ?? DEFAULT_TEAM_ID },
       },
-    });
+      { allowRefresh: false },
+    );
     return mapApiUserToUser(raw);
   },
 
@@ -268,8 +412,9 @@ export const api = {
   },
 
   async listNotifications(userId: string): Promise<Notification[]> {
-    const qs = `?userId=${encodeURIComponent(userId)}`;
-    const rows = await request<ApiNotification[]>(`/api/notifications${qs}`);
+    const rows = await request<ApiNotification[]>(
+      `/api/notifications?userId=${encodeURIComponent(userId)}`,
+    );
     return rows.map(mapApiNotificationToNotification);
   },
 
@@ -326,7 +471,6 @@ export const api = {
     return mapApiActivityToActivity(raw, map);
   },
 
-  /** Mirrors Nest GET /api/projects/team/:teamId */
   async listProjects(teamId: string): Promise<Project[]> {
     const rows = await request<ApiProject[]>(
       `/api/projects/team/${encodeURIComponent(teamId)}`,
@@ -376,13 +520,10 @@ export const api = {
       endDate?: string;
     }>,
   ): Promise<Project> {
-    const raw = await request<ApiProject>(
-      `/api/projects/${encodeURIComponent(id)}`,
-      {
-        method: "PATCH",
-        json: patch,
-      },
-    );
+    const raw = await request<ApiProject>(`/api/projects/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      json: patch,
+    });
     return mapApiProjectToProject(raw);
   },
 
@@ -392,7 +533,6 @@ export const api = {
     });
   },
 
-  /** Mirrors Nest GET /api/tasks/team/:teamId */
   async listTasksForTeam(teamId: string): Promise<ApiTask[]> {
     return request<ApiTask[]>(`/api/tasks/team/${encodeURIComponent(teamId)}`);
   },
@@ -458,10 +598,6 @@ export const api = {
     return raw.map((c) => mapApiCommentToComment(c, map));
   },
 
-  /**
-   * Mirrors Nest POST /api/comments body: CreateCommentDto
-   * (`taskId`, `content`; optional `authorId` defaults to `"dummy"` on server).
-   */
   async addComment(
     taskId: string,
     content: string,
@@ -481,7 +617,6 @@ export const api = {
     return mapApiCommentToComment(raw, map);
   },
 
-  /** Nest PATCH /api/comments/:taskId/:commentId — body: { content } */
   async updateComment(
     taskId: string,
     commentId: string,
@@ -496,7 +631,6 @@ export const api = {
     return mapApiCommentToComment(raw, map);
   },
 
-  /** Nest DELETE /api/comments/:taskId/:commentId */
   async deleteComment(taskId: string, commentId: string): Promise<void> {
     await request(
       `/api/comments/${encodeURIComponent(taskId)}/${encodeURIComponent(commentId)}`,
