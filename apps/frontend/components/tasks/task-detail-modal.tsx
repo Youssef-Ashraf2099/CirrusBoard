@@ -123,18 +123,17 @@ export function TaskDetailModal({
     if (!task) return
     setDetailLoading(true)
     try {
-      const raw = await api.getTask(task.id)
-      const users = await api.listUsers().catch(() => [])
-      setDetail(
-        mapApiTaskToTask(raw, buildUserMap(users), task.commentsCount),
-      )
+      const full = await api.getTaskWithMeta(task.id)
+      setDetail(full)
       onTaskUpdated?.()
+      return full
     } catch {
       toast.error('Could not refresh task')
+      return null
     } finally {
       setDetailLoading(false)
     }
-  }, [task?.id, task?.commentsCount, onTaskUpdated])
+  }, [task?.id, onTaskUpdated])
 
   useEffect(() => {
     if (!open || !task) {
@@ -241,42 +240,63 @@ export function TaskDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col bg-card border-border">
-        <DialogHeader className="shrink-0">
+      <DialogContent className="max-w-5xl w-[95vw] max-h-[92vh] overflow-hidden flex flex-col bg-card border-border p-6 sm:p-8">
+        <DialogHeader className="shrink-0 pb-2">
           <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <Badge variant="outline" className={cn('text-xs', priority.color)}>
-                  {priority.label}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={cn('text-xs flex items-center gap-1', status.color)}
-                >
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <Badge variant="outline" className={cn('text-sm gap-1', status.color)}>
                   {status.icon}
                   {status.label}
                 </Badge>
+                <Badge variant="outline" className={cn('text-sm', priority.color)}>
+                  {priority.label}
+                </Badge>
+                {project && (
+                  <Badge variant="secondary" className="text-sm">
+                    {project.name}
+                  </Badge>
+                )}
               </div>
-              <DialogTitle className="text-xl font-semibold text-foreground">
-                {task.title}
+              <DialogTitle className="text-2xl font-semibold text-foreground leading-snug pr-4">
+                {view.title}
               </DialogTitle>
             </div>
-            <Button variant="ghost" size="icon">
-              <MoreHorizontal className="w-5 h-5" />
-            </Button>
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 py-4">
-            <div className="lg:col-span-2 space-y-6">
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 py-2">
+            <div className="lg:col-span-3 space-y-8">
               <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-2">
+                <h4 className="text-sm font-semibold text-foreground mb-3">
                   Description
                 </h4>
-                <p className="text-foreground">
-                  {task.description || 'No description provided.'}
+                <p className="text-base text-foreground/90 leading-relaxed whitespace-pre-wrap">
+                  {view.description || 'No description provided.'}
                 </p>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <Paperclip className="w-4 h-4" />
+                  Attachments
+                  {(view.attachments?.length ?? 0) > 0 && (
+                    <Badge variant="secondary">{view.attachments?.length}</Badge>
+                  )}
+                  {detailLoading && (
+                    <span className="text-muted-foreground font-normal text-xs">
+                      refreshing…
+                    </span>
+                  )}
+                </h4>
+                <Card className="border-border/60 bg-muted/20 p-4 sm:p-5">
+                  <TaskAttachmentsPanel
+                    taskId={view.id}
+                    attachments={view.attachments ?? []}
+                    onAttachmentsChange={() => void refreshDetail()}
+                  />
+                </Card>
               </div>
 
               <Separator />
@@ -436,12 +456,12 @@ export function TaskDetailModal({
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="lg:col-span-2 space-y-5">
               <Card className="border-border/50 bg-muted/30 shadow-none">
-                <div className="p-4 space-y-4">
+                <div className="p-5 sm:p-6 space-y-5">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
-                      <User className="w-3 h-3" />
+                    <label className="text-sm font-medium text-foreground flex items-center gap-1.5 mb-2">
+                      <User className="w-4 h-4 text-muted-foreground" />
                       Assignee
                     </label>
                     {canManage ? (
@@ -470,23 +490,23 @@ export function TaskDetailModal({
                   </div>
 
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
-                      <FolderKanban className="w-3 h-3" />
+                    <label className="text-sm font-medium text-foreground flex items-center gap-1.5 mb-2">
+                      <FolderKanban className="w-4 h-4 text-muted-foreground" />
                       Project
                     </label>
-                    <span className="text-sm text-foreground">
+                    <span className="text-base text-foreground">
                       {project?.name || 'No project'}
                     </span>
                   </div>
 
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
-                      <Calendar className="w-3 h-3" />
-                      Due Date
+                    <label className="text-sm font-medium text-foreground flex items-center gap-1.5 mb-2">
+                      <Calendar className="w-4 h-4 text-muted-foreground" />
+                      Due date
                     </label>
-                    <span className="text-sm text-foreground">
-                      {task.dueDate
-                        ? new Date(task.dueDate).toLocaleDateString(
+                    <span className="text-base text-foreground">
+                      {view.dueDate
+                        ? new Date(view.dueDate).toLocaleDateString(
                             'en-US',
                             {
                               month: 'long',
@@ -499,39 +519,22 @@ export function TaskDetailModal({
                   </div>
 
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
-                      <Tag className="w-3 h-3" />
+                    <label className="text-sm font-medium text-foreground flex items-center gap-1.5 mb-2">
+                      <Tag className="w-4 h-4 text-muted-foreground" />
                       Tags
                     </label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {task.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary" className="text-xs">
+                    <div className="flex flex-wrap gap-2">
+                      {view.tags.map((tag) => (
+                        <Badge key={tag} variant="secondary">
                           {tag}
                         </Badge>
                       ))}
-                      {!task.tags.length && (
-                        <span className="text-xs text-muted-foreground">
+                      {!view.tags.length && (
+                        <span className="text-sm text-muted-foreground">
                           None
                         </span>
                       )}
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
-                      <Paperclip className="w-3 h-3" />
-                      Attachments
-                      {detailLoading && (
-                        <span className="text-muted-foreground font-normal">
-                          (refreshing…)
-                        </span>
-                      )}
-                    </label>
-                    <TaskAttachmentsPanel
-                      taskId={view.id}
-                      attachments={view.attachments ?? []}
-                      onAttachmentsChange={() => void refreshDetail()}
-                    />
                   </div>
 
                   <TaskAuditLogPanel
@@ -541,12 +544,12 @@ export function TaskDetailModal({
                   />
 
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
-                      <Clock className="w-3 h-3" />
+                    <label className="text-sm font-medium text-foreground flex items-center gap-1.5 mb-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
                       Created
                     </label>
-                    <span className="text-sm text-foreground">
-                      {new Date(task.createdAt).toLocaleDateString('en-US', {
+                    <span className="text-base text-foreground">
+                      {new Date(view.createdAt).toLocaleDateString('en-US', {
                         month: 'long',
                         day: 'numeric',
                         year: 'numeric',

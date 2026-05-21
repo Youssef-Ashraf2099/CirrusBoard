@@ -41,6 +41,8 @@ interface TaskFormModalProps {
   teamId: string
   task?: Task | null
   onSaved: () => void
+  /** After create (and uploads), opens detail view with fresh task from API. */
+  onTaskCreated?: (task: Task) => void
 }
 
 export function TaskFormModal({
@@ -51,6 +53,7 @@ export function TaskFormModal({
   teamId,
   task,
   onSaved,
+  onTaskCreated,
 }: TaskFormModalProps) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -184,6 +187,14 @@ export function TaskFormModal({
                 ? uploadErr.message
                 : 'Task created but file upload failed'
             toast.error(msg)
+            try {
+              const fullTask = await api.getTaskWithMeta(created.taskId)
+              onTaskCreated?.(fullTask)
+            } catch {
+              onTaskCreated?.(
+                mapApiTaskToTask(created, buildUserMap(users), 0),
+              )
+            }
             onSaved()
             onOpenChange(false)
             return
@@ -191,6 +202,14 @@ export function TaskFormModal({
         }
 
         toast.success('Task created')
+        try {
+          const fullTask = await api.getTaskWithMeta(created.taskId)
+          onTaskCreated?.(fullTask)
+        } catch {
+          onTaskCreated?.(
+            mapApiTaskToTask(created, buildUserMap(users), editAttachments.length),
+          )
+        }
       }
       onSaved()
       onOpenChange(false)
@@ -205,11 +224,11 @@ export function TaskFormModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-card border-border">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit task' : 'Create task'}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="task-title">Title</Label>
             <Input
@@ -226,7 +245,7 @@ export function TaskFormModal({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Details, acceptance criteria…"
-              className="min-h-[96px]"
+              className="min-h-[120px] text-base"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">

@@ -146,6 +146,30 @@ export default function TasksPage() {
 
   const usersResolved = members
 
+  const openTaskDetail = useCallback(async (task: Task) => {
+    try {
+      const full = await api.getTaskWithMeta(task.id)
+      setSelectedTask(full)
+      setModalOpen(true)
+    } catch {
+      setSelectedTask(task)
+      setModalOpen(true)
+    }
+  }, [])
+
+  const syncSelectedTask = useCallback(async () => {
+    if (!selectedTask?.id || !modalOpen) return
+    try {
+      const full = await api.getTaskWithMeta(selectedTask.id)
+      setSelectedTask(full)
+      setTasks((prev) =>
+        prev.map((t) => (t.id === full.id ? full : t)),
+      )
+    } catch {
+      /* keep current selection */
+    }
+  }, [selectedTask?.id, modalOpen])
+
   return (
     <>
       <motion.div
@@ -292,13 +316,10 @@ export default function TasksPage() {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.3, delay: Math.min(index * 0.04, 0.4) }}
-                      onClick={() => {
-                        setSelectedTask(task)
-                        setModalOpen(true)
-                      }}
-                      className="p-4 hover:bg-muted/30 cursor-pointer transition-colors group"
+                      onClick={() => void openTaskDetail(task)}
+                      className="p-5 sm:p-6 hover:bg-muted/30 cursor-pointer transition-colors group min-h-[88px]"
                     >
-                      <div className="flex items-start gap-4">
+                      <div className="flex items-start gap-5">
                         <Checkbox
                           checked={task.status === 'done'}
                           className="mt-1"
@@ -308,10 +329,10 @@ export default function TasksPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-4 mb-2">
                             <div className="flex-1">
-                              <h3 className="font-medium text-foreground group-hover:text-primary transition-colors">
+                              <h3 className="text-base font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {task.title}
                               </h3>
-                              <p className="text-sm text-muted-foreground line-clamp-1">
+                              <p className="text-sm text-muted-foreground line-clamp-2 mt-1 leading-relaxed">
                                 {task.description || 'No description'}
                               </p>
                             </div>
@@ -405,8 +426,14 @@ export default function TasksPage() {
         currentUser={user}
         open={modalOpen}
         onOpenChange={setModalOpen}
-        onCommentsChanged={() => void reload()}
-        onTaskUpdated={() => void reload()}
+        onCommentsChanged={() => {
+          void reload()
+          void syncSelectedTask()
+        }}
+        onTaskUpdated={() => {
+          void reload()
+          void syncSelectedTask()
+        }}
       />
 
       <TaskFormModal
@@ -417,6 +444,11 @@ export default function TasksPage() {
         teamId={canViewAllTeams ? viewTeamId : teamId}
         task={taskToEdit}
         onSaved={() => void reload()}
+        onTaskCreated={(created) => {
+          void reload()
+          setSelectedTask(created)
+          setModalOpen(true)
+        }}
       />
     </>
   )
