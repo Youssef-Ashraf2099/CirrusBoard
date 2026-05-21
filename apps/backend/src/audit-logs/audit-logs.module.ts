@@ -3,17 +3,12 @@ import { AuditLogsService } from './audit-logs.service';
 import { AuditLogsController } from './audit-logs.controller';
 import { AuditLogsRepository } from './audit-logs.repository';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { createSharedDynamoDBClient } from '../common/dynamo-client.factory';
 
 const dynamoClientProvider = {
   provide: 'DYNAMO_CLIENT',
-  useFactory: () => {
-    const client = new DynamoDBClient({
-      region: process.env.AWS_REGION || 'us-east-1',
-      endpoint: process.env.DYNAMODB_ENDPOINT,
-    });
-    return DynamoDBDocumentClient.from(client);
-  },
+  useFactory: () =>
+    DynamoDBDocumentClient.from(createSharedDynamoDBClient()),
 };
 
 const tableNameProvider = {
@@ -21,11 +16,17 @@ const tableNameProvider = {
   useValue: process.env.TASK_AUDIT_LOGS_TABLE || 'TaskAuditLogs',
 };
 
+const teamGsiProvider = {
+  provide: 'TASK_AUDIT_LOGS_TEAM_GSI',
+  useValue: process.env.TASK_AUDIT_LOGS_TEAM_GSI || 'TeamActivityIndex',
+};
+
 @Module({
   controllers: [AuditLogsController],
   providers: [
     dynamoClientProvider,
     tableNameProvider,
+    teamGsiProvider,
     AuditLogsRepository,
     AuditLogsService,
   ],
