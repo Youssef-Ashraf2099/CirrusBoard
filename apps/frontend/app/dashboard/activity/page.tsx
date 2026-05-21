@@ -74,6 +74,7 @@ export default function ActivityPage() {
       action: form.action,
       target: form.target,
       targetId: form.targetId,
+      ...(form.target === 'task' ? { taskId: form.targetId } : {}),
     }
     logApi('Activity', 'ActivityPage.handleCreate start', payload)
     try {
@@ -99,7 +100,7 @@ export default function ActivityPage() {
             Activity feed
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Team-scoped activity log (GET /api/activity). Managers can post demo entries.
+            Team feed from TaskAuditLogs (GET /api/activity). Task changes are logged automatically.
           </p>
         </div>
         {canRecord && (
@@ -124,7 +125,9 @@ export default function ActivityPage() {
               <Plus className="w-4 h-4" />
               Record activity
             </CardTitle>
-            <CardDescription>For seeding demos; production events come from SNS/SQS workers.</CardDescription>
+            <CardDescription>
+              Manual entries are stored as audit rows. Use target &quot;task&quot; and put the task id in Target id.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form

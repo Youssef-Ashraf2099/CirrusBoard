@@ -16,7 +16,8 @@ module.exports = {
       COMMENTS_TABLE: 'Comments',
       TEAMS_TABLE: 'Teams',
       NOTIFICATIONS_TABLE: 'Notifications',
-      ACTIVITY_TABLE: 'Activity',
+      TASK_AUDIT_LOGS_TABLE: 'TaskAuditLogs',
+      TASK_AUDIT_LOGS_TEAM_GSI: 'TeamActivityIndex',
     }
   }]
 }

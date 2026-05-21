@@ -44,13 +44,18 @@ export class TasksService {
     taskId: string,
     actorId: string,
     action: string,
+    teamId: string,
     oldValue?: unknown,
     newValue?: unknown,
+    meta?: { target?: string; targetId?: string },
   ) {
     const payload = {
       taskId,
       action,
       actorId,
+      teamId,
+      target: meta?.target ?? 'task',
+      targetId: meta?.targetId ?? taskId,
       oldValue: this.serializeAuditValue(oldValue),
       newValue: this.serializeAuditValue(newValue),
     };
@@ -102,12 +107,12 @@ export class TasksService {
       created.taskId,
       actor.userId,
       "TASK_CREATED",
+      created.teamId,
       undefined,
       {
         title: created.title,
         status: created.status,
         assigneeId: created.assigneeId,
-        teamId: created.teamId,
       },
     );
     return created;
@@ -144,12 +149,9 @@ export class TasksService {
       taskId,
       actor.userId,
       "TASK_STATUS_UPDATED",
-      {
-        status: task.status,
-      },
-      {
-        status,
-      },
+      task.teamId,
+      { status: task.status },
+      { status },
     );
     return updated;
   }
@@ -180,12 +182,9 @@ export class TasksService {
       taskId,
       actor.userId,
       "TASK_ASSIGNED",
-      {
-        assigneeId: previousAssignee,
-      },
-      {
-        assigneeId,
-      },
+      task.teamId,
+      { assigneeId: previousAssignee },
+      { assigneeId },
     );
 
     if (this.sns) {
@@ -247,10 +246,13 @@ export class TasksService {
     if (!isPrivileged(actor.role) && actor.primaryTeamId !== task.teamId) {
       throw new ForbiddenException("Access denied");
     }
-    await this.recordAuditLog(taskId, actor.userId, "TASK_DELETED", {
-      status: task.status,
-      assigneeId: task.assigneeId,
-    });
+    await this.recordAuditLog(
+      taskId,
+      actor.userId,
+      "TASK_DELETED",
+      task.teamId,
+      { status: task.status, assigneeId: task.assigneeId },
+    );
     await this.repo.deleteTask(taskId);
   }
 
@@ -396,11 +398,10 @@ export class TasksService {
       taskId,
       actor.userId,
       "TASK_ATTACHMENT_CONFIRMED",
+      task.teamId,
       undefined,
-      {
-        attachmentId: att.attachmentId,
-        key,
-      },
+      { attachmentId: att.attachmentId, key },
+      { target: 'attachment', targetId: att.attachmentId },
     );
 
     return updatedTask;
