@@ -528,6 +528,7 @@ export const api = {
     action: string;
     target: string;
     targetId: string;
+    taskId?: string;
   }): Promise<ActivityItem> {
     console.log("[CirrusBoard:Activity] api.createActivity → POST /api/activity", input);
     try {

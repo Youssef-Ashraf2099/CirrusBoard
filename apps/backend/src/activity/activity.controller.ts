@@ -18,7 +18,9 @@ export class ActivityController {
   constructor(private readonly activity: ActivityService) {}
 
   @Get()
-  @ApiOperation({ summary: "Team activity feed" })
+  @ApiOperation({
+    summary: "Team activity feed (from TaskAuditLogs)",
+  })
   list(
     @Query("teamId") teamId: string,
     @Query("limit") limit?: string,
@@ -29,7 +31,9 @@ export class ActivityController {
   }
 
   @Post()
-  @ApiOperation({ summary: "Record activity (demo / seeding)" })
+  @ApiOperation({
+    summary: "Record team activity (stored in TaskAuditLogs)",
+  })
   create(@Body() body: CreateActivityDto) {
     return this.activity.create(DummyUser, body);
   }
