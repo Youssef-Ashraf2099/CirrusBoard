@@ -17,6 +17,9 @@ module.exports = {
       TEAMS_TABLE: 'Teams',
       NOTIFICATIONS_TABLE: 'Notifications',
       ACTIVITY_TABLE: 'Activity',
+      S3_BUCKET_NAME: 'cirrusboard-upload',
+      SNS_TASK_ASSIGN_TOPIC_ARN: 'arn:aws:sns:eu-north-1:409987739232:cirrusboard-task-assign',
+      SQS_TASK_ASSIGN_QUEUE_URL: 'https://sqs.eu-north-1.amazonaws.com/409987739232/cirrusboard-task-assign',
     }
   }]
 }
