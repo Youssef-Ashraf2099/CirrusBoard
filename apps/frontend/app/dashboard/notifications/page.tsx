@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Bell, Trash2, Plus, Loader2 } from 'lucide-react'
 import { api, ApiError } from '@/lib/api/client'
+import { logApi, logApiError } from '@/lib/debug-api'
 import type { Notification, User } from '@/lib/types'
 import { toast } from 'sonner'
 import { isPrivilegedRole } from '@/lib/roles'
@@ -49,16 +50,28 @@ export default function NotificationsPage() {
   })
 
   const load = useCallback(async () => {
-    if (!user?.id) return
+    if (!user?.id) {
+      logApi('Notifications', 'NotificationsPage.load skipped — no user.id')
+      return
+    }
+    logApi('Notifications', 'NotificationsPage.load start', {
+      userId: user.id,
+      canBroadcast,
+    })
     setLoading(true)
     try {
       const [n, u] = await Promise.all([
         api.listNotifications(user.id),
         canBroadcast ? api.listUsers() : Promise.resolve([] as User[]),
       ])
+      logApi('Notifications', 'NotificationsPage.load success', {
+        notifications: n.length,
+        users: u.length,
+      })
       setItems(n.sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
       setAllUsers(u)
     } catch (e) {
+      logApiError('Notifications', 'NotificationsPage.load', e)
       toast.error(e instanceof ApiError ? e.message : 'Could not load notifications')
     } finally {
       setLoading(false)
@@ -70,11 +83,14 @@ export default function NotificationsPage() {
   }, [load])
 
   async function handleDelete(id: string) {
+    logApi('Notifications', 'NotificationsPage.handleDelete start', { id })
     try {
       await api.deleteNotification(id)
+      logApi('Notifications', 'NotificationsPage.handleDelete success')
       setItems((prev) => prev.filter((n) => n.id !== id))
       toast.success('Notification removed')
     } catch (e) {
+      logApiError('Notifications', 'NotificationsPage.handleDelete', e)
       toast.error(e instanceof ApiError ? e.message : 'Delete failed')
     }
   }
@@ -82,20 +98,27 @@ export default function NotificationsPage() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     const targetId = canBroadcast ? form.userId : user?.id
-    if (!targetId) return
+    if (!targetId) {
+      logApi('Notifications', 'NotificationsPage.handleCreate skipped — no targetId')
+      return
+    }
     setCreating(true)
+    const payload = {
+      userId: targetId,
+      type: form.type,
+      title: form.title,
+      message: form.message,
+      link: form.link || undefined,
+    }
+    logApi('Notifications', 'NotificationsPage.handleCreate start', payload)
     try {
-      await api.createNotification({
-        userId: targetId,
-        type: form.type,
-        title: form.title,
-        message: form.message,
-        link: form.link || undefined,
-      })
+      await api.createNotification(payload)
+      logApi('Notifications', 'NotificationsPage.handleCreate success')
       toast.success('Notification created')
       setForm((f) => ({ ...f, title: '', message: '', link: '' }))
       await load()
     } catch (err) {
+      logApiError('Notifications', 'NotificationsPage.handleCreate', err)
       toast.error(err instanceof ApiError ? err.message : 'Create failed')
     } finally {
       setCreating(false)

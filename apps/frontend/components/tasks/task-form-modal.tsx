@@ -22,6 +22,9 @@ import {
 import { toast } from 'sonner'
 import type { Project, Task, TaskPriority, TaskStatus, User } from '@/lib/types'
 import { api, ApiError } from '@/lib/api/client'
+import { mapApiTaskToTask } from '@/lib/api/mappers'
+import { buildUserMap } from '@/lib/api/client'
+import type { TaskAttachment } from '@/lib/types'
 import {
   FileUploadDropzone,
   patchStagedUploads,
@@ -57,6 +60,7 @@ export function TaskFormModal({
   const [status, setStatus] = useState<TaskStatus>('todo')
   const [dueDate, setDueDate] = useState('')
   const [uploads, setUploads] = useState<StagedUpload[]>([])
+  const [editAttachments, setEditAttachments] = useState<TaskAttachment[]>([])
   const [submitting, setSubmitting] = useState(false)
 
   const isEdit = !!task
@@ -81,6 +85,18 @@ export function TaskFormModal({
       setDueDate(new Date().toISOString().slice(0, 10))
     }
     setUploads([])
+    if (task) {
+      setEditAttachments(task.attachments ?? [])
+      void api
+        .getTask(task.id)
+        .then((raw) => {
+          const mapped = mapApiTaskToTask(raw, buildUserMap(users), 0)
+          setEditAttachments(mapped.attachments ?? [])
+        })
+        .catch(() => {})
+    } else {
+      setEditAttachments([])
+    }
   }, [open, task, projects, users])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -140,7 +156,7 @@ export function TaskFormModal({
                   progress: 0,
                 }),
               )
-              await uploadTaskAttachments(
+              const updated = await uploadTaskAttachments(
                 created.taskId,
                 [item.file],
                 (_idx, percent) => {
@@ -152,6 +168,9 @@ export function TaskFormModal({
                   )
                 },
               )
+              if (updated?.attachments?.length) {
+                setEditAttachments(updated.attachments)
+              }
               setUploads((prev) =>
                 patchStagedUploads(prev, item.id, {
                   status: 'complete',
@@ -304,8 +323,21 @@ export function TaskFormModal({
               task && (
                 <TaskAttachmentsPanel
                   taskId={task.id}
-                  attachments={task.attachments ?? []}
-                  onAttachmentsChange={onSaved}
+                  attachments={editAttachments}
+                  onAttachmentsChange={async () => {
+                    try {
+                      const raw = await api.getTask(task.id)
+                      const mapped = mapApiTaskToTask(
+                        raw,
+                        buildUserMap(users),
+                        0,
+                      )
+                      setEditAttachments(mapped.attachments ?? [])
+                    } catch {
+                      /* panel already refreshed its list */
+                    }
+                    onSaved()
+                  }}
                 />
               )
             )}

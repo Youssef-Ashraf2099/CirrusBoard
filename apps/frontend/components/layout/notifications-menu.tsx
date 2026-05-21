@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { api, ApiError } from '@/lib/api/client'
+import { logApi, logApiError } from '@/lib/debug-api'
 import { useAuth } from '@/lib/auth-context'
 import type { Notification } from '@/lib/types'
 import { toast } from 'sonner'
@@ -39,14 +40,20 @@ export function NotificationsMenu() {
 
   const load = useCallback(async () => {
     if (!user?.id) {
+      logApi('Notifications', 'NotificationsMenu.load skipped — no user.id')
       setItems([])
       return
     }
+    logApi('Notifications', 'NotificationsMenu.load start (bell opened)', {
+      userId: user.id,
+    })
     setLoading(true)
     try {
       const rows = await api.listNotifications(user.id)
+      logApi('Notifications', 'NotificationsMenu.load success', { count: rows.length })
       setItems(rows)
     } catch (e) {
+      logApiError('Notifications', 'NotificationsMenu.load', e)
       toast.error(
         e instanceof ApiError ? e.message : 'Could not load notifications',
       )
@@ -63,23 +70,28 @@ export function NotificationsMenu() {
   async function removeNotification(n: Notification, e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
+    logApi('Notifications', 'NotificationsMenu.removeNotification start', { id: n.id })
     try {
       await api.deleteNotification(n.id)
+      logApi('Notifications', 'NotificationsMenu.removeNotification success')
       setItems((prev) => prev.filter((x) => x.id !== n.id))
-    } catch {
+    } catch (err) {
+      logApiError('Notifications', 'NotificationsMenu.removeNotification', err)
       toast.error('Could not delete notification')
     }
   }
 
   async function markRead(n: Notification) {
     if (n.read) return
+    logApi('Notifications', 'NotificationsMenu.markRead start', { id: n.id })
     try {
       const updated = await api.patchNotification(n.id, true)
+      logApi('Notifications', 'NotificationsMenu.markRead success', updated)
       setItems((prev) =>
         prev.map((x) => (x.id === n.id ? updated : x)),
       )
-    } catch {
-      /* ignore */
+    } catch (err) {
+      logApiError('Notifications', 'NotificationsMenu.markRead', err)
     }
   }
 
