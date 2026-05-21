@@ -37,6 +37,20 @@ export interface Project {
   createdAt: string
 }
 
+export interface TaskAttachment {
+  id: string
+  taskId: string
+  name: string
+  /** Public or path URL from API; use download API for private buckets */
+  url: string
+  type: string
+  size: number
+  uploadedBy: string
+  createdAt: string
+  originalKey?: string
+  thumbnailUrl?: string
+}
+
 export interface Task {
   id: string
   title: string
@@ -51,6 +65,7 @@ export interface Task {
   tags: string[]
   commentsCount: number
   attachmentsCount: number
+  attachments?: TaskAttachment[]
   createdAt: string
   updatedAt: string
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -30,7 +30,19 @@ import {
   AlertCircle,
   Timer,
 } from 'lucide-react'
-import type { Comment, Project, Task, TaskStatus, TaskPriority, User as AppUser } from '@/lib/types'
+import type {
+  Comment,
+  Project,
+  Task,
+  TaskStatus,
+  TaskPriority,
+  User as AppUser,
+} from '@/lib/types'
+import { mapApiTaskToTask } from '@/lib/api/mappers'
+import { TaskAttachmentsPanel } from '@/components/tasks/task-attachments-panel'
+import { TaskAuditLogPanel } from '@/components/tasks/task-audit-log-panel'
+import { TaskAssignControl } from '@/components/tasks/task-assign-control'
+import { isPrivilegedRole } from '@/lib/roles'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, ApiError } from '@/lib/api/client'
 import { toast } from 'sonner'
@@ -82,6 +94,7 @@ interface TaskDetailModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCommentsChanged?: () => void
+  onTaskUpdated?: () => void
 }
 
 export function TaskDetailModal({
@@ -91,19 +104,45 @@ export function TaskDetailModal({
   open,
   onOpenChange,
   onCommentsChanged,
+  onTaskUpdated,
 }: TaskDetailModalProps) {
+  const [detail, setDetail] = useState<Task | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [newComment, setNewComment] = useState('')
   const [comments, setComments] = useState<Comment[]>([])
   const [commentsLoading, setCommentsLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState('')
+  const [teamUsers, setTeamUsers] = useState<AppUser[]>([])
+
+  const canManage = isPrivilegedRole(currentUser?.role)
+
+  const refreshDetail = useCallback(async () => {
+    if (!task) return
+    setDetailLoading(true)
+    try {
+      const raw = await api.getTask(task.id)
+      setDetail(
+        mapApiTaskToTask(raw, new Map(), task.commentsCount),
+      )
+      onTaskUpdated?.()
+    } catch {
+      toast.error('Could not refresh task')
+    } finally {
+      setDetailLoading(false)
+    }
+  }, [task?.id, task?.commentsCount, onTaskUpdated])
 
   useEffect(() => {
     if (!open || !task) {
       setComments([])
+      setDetail(null)
       return
     }
+    setDetail(task)
+    void refreshDetail()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when task id / open changes
     setCommentsLoading(true)
     void api
       .listComments(task.id)
@@ -112,7 +151,14 @@ export function TaskDetailModal({
         toast.error('Could not load comments')
       })
       .finally(() => setCommentsLoading(false))
-  }, [open, task?.id])
+
+    if (canManage) {
+      void api
+        .listUsers()
+        .then(setTeamUsers)
+        .catch(() => setTeamUsers([]))
+    }
+  }, [open, task?.id, canManage])
 
   useEffect(() => {
     setEditingId(null)
@@ -123,9 +169,10 @@ export function TaskDetailModal({
     return null
   }
 
-  const project = projects.find((p) => p.id === task.projectId)
-  const status = statusConfig[task.status]
-  const priority = priorityConfig[task.priority]
+  const view = detail ?? task
+  const project = projects.find((p) => p.id === view.projectId)
+  const status = statusConfig[view.status]
+  const priority = priorityConfig[view.priority]
 
   async function handleSubmitComment() {
     if (!task) return
@@ -395,16 +442,22 @@ export function TaskDetailModal({
                       <User className="w-3 h-3" />
                       Assignee
                     </label>
-                    {task.assignee ? (
+                    {canManage ? (
+                      <TaskAssignControl
+                        task={view}
+                        users={teamUsers}
+                        onAssigned={() => void refreshDetail()}
+                      />
+                    ) : view.assignee ? (
                       <div className="flex items-center gap-2">
                         <Avatar className="w-6 h-6">
-                          <AvatarImage src={task.assignee.avatar} />
+                          <AvatarImage src={view.assignee.avatar} />
                           <AvatarFallback>
-                            {task.assignee.name.charAt(0)}
+                            {view.assignee.name.charAt(0)}
                           </AvatarFallback>
                         </Avatar>
                         <span className="text-sm text-foreground">
-                          {task.assignee.name}
+                          {view.assignee.name}
                         </span>
                       </div>
                     ) : (
@@ -466,13 +519,24 @@ export function TaskDetailModal({
                     <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
                       <Paperclip className="w-3 h-3" />
                       Attachments
+                      {detailLoading && (
+                        <span className="text-muted-foreground font-normal">
+                          (refreshing…)
+                        </span>
+                      )}
                     </label>
-                    <span className="text-sm text-foreground">
-                      {task.attachmentsCount}{' '}
-                      file
-                      {task.attachmentsCount !== 1 ? 's' : ''}
-                    </span>
+                    <TaskAttachmentsPanel
+                      taskId={view.id}
+                      attachments={view.attachments ?? []}
+                      onAttachmentsChange={() => void refreshDetail()}
+                    />
                   </div>
+
+                  <TaskAuditLogPanel
+                    taskId={view.id}
+                    actorId={currentUser?.id ?? ''}
+                    canRecord={canManage}
+                  />
 
                   <div>
                     <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">

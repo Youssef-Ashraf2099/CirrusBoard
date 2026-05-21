@@ -41,6 +41,7 @@ import type { Task, TaskStatus, TaskPriority, Project, User } from '@/lib/types'
 import { api, ApiError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
+import { isPrivilegedRole } from '@/lib/roles'
 
 const statusConfig: Record<TaskStatus, { label: string; icon: React.ReactNode; color: string }> = {
   todo: { label: 'To Do', icon: <Circle className="w-4 h-4" />, color: 'text-blue-500' },
@@ -69,24 +70,36 @@ export default function TasksPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
+  const [viewTeamId, setViewTeamId] = useState(teamId)
+  const [teamOptions, setTeamOptions] = useState<{ id: string; name: string }[]>([])
+  const canViewAllTeams = isPrivilegedRole(user?.role)
 
   const reload = useCallback(async () => {
     setLoading(true)
     try {
+      const scopeTeam = canViewAllTeams ? viewTeamId : teamId
       const [p, tRaw, mu] = await Promise.all([
-        api.listProjects(teamId),
-        api.loadTasksWithMeta(teamId),
-        api.listUsers(teamId),
+        api.listProjects(scopeTeam),
+        api.loadTasksWithMeta(scopeTeam),
+        api.listUsers(scopeTeam),
       ])
       setProjects(p)
       setTasks(tRaw)
       setMembers(mu)
+      if (canViewAllTeams) {
+        const teams = await api.listTeams().catch(() => [])
+        setTeamOptions(teams.map((t) => ({ id: t.id, name: t.name })))
+      }
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : 'Could not load tasks'
       toast.error(msg)
     } finally {
       setLoading(false)
     }
+  }, [teamId, viewTeamId, canViewAllTeams])
+
+  useEffect(() => {
+    setViewTeamId(teamId)
   }, [teamId])
 
   useEffect(() => {
@@ -145,10 +158,29 @@ export default function TasksPage() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Tasks</h1>
             <p className="text-muted-foreground">
-              Live data from the CirrusBoard API ({teamId})
+              Live data from the CirrusBoard API
+              {canViewAllTeams ? ` · team ${viewTeamId}` : ` (${teamId})`}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            {canViewAllTeams && (
+              <Select value={viewTeamId} onValueChange={setViewTeamId}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Team" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teamOptions.length > 0 ? (
+                    teamOptions.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value={viewTeamId}>{viewTeamId}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            )}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -374,6 +406,7 @@ export default function TasksPage() {
         open={modalOpen}
         onOpenChange={setModalOpen}
         onCommentsChanged={() => void reload()}
+        onTaskUpdated={() => void reload()}
       />
 
       <TaskFormModal
@@ -381,7 +414,7 @@ export default function TasksPage() {
         onOpenChange={setTaskFormOpen}
         projects={projects}
         users={usersResolved}
-        teamId={teamId}
+        teamId={canViewAllTeams ? viewTeamId : teamId}
         task={taskToEdit}
         onSaved={() => void reload()}
       />

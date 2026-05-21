@@ -38,12 +38,13 @@ import { api, ApiError } from '@/lib/api/client'
 import { DEFAULT_TEAM_ID } from '@/lib/config'
 import type { User } from '@/lib/types'
 import { UserPlus, Pencil, Trash2, RefreshCw } from 'lucide-react'
+import { isAdminRole } from '@/lib/roles'
 
 type FormState = {
   name: string
   email: string
   password: string
-  role: 'EMPLOYEE' | 'MANAGER'
+  role: 'EMPLOYEE' | 'MANAGER' | 'ADMIN'
   primaryTeamId: string
   isActive: boolean
 }
@@ -66,7 +67,8 @@ export default function UsersManagementPage() {
 }
 
 function UsersManagementInner() {
-  const { teamId, refreshUser } = useAuth()
+  const { teamId, refreshUser, user: currentUser } = useAuth()
+  const showAdminRole = isAdminRole(currentUser?.role)
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
@@ -100,7 +102,12 @@ function UsersManagementInner() {
       name: u.name,
       email: u.email,
       password: '',
-      role: u.role === 'manager' ? 'MANAGER' : 'EMPLOYEE',
+      role:
+        u.role === 'admin'
+          ? 'ADMIN'
+          : u.role === 'manager'
+            ? 'MANAGER'
+            : 'EMPLOYEE',
       primaryTeamId: u.teamId,
       isActive: true,
     })
@@ -279,6 +286,9 @@ function UsersManagementInner() {
                   <SelectContent>
                     <SelectItem value="EMPLOYEE">Employee</SelectItem>
                     <SelectItem value="MANAGER">Manager</SelectItem>
+                    {showAdminRole && (
+                      <SelectItem value="ADMIN">Admin</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </Field>
@@ -342,6 +352,9 @@ function UsersManagementInner() {
                   <SelectContent>
                     <SelectItem value="EMPLOYEE">Employee</SelectItem>
                     <SelectItem value="MANAGER">Manager</SelectItem>
+                    {showAdminRole && (
+                      <SelectItem value="ADMIN">Admin</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </Field>

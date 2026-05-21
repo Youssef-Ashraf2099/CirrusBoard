@@ -41,6 +41,21 @@ export class TasksController {
     return this.tasksService.listTasksForTeam(user as UserItem, teamId);
   }
 
+  @Get(":id/attachments/:attachmentId/download-url")
+  @ApiOperation({ summary: "Presigned URL to download an attachment" })
+  attachmentDownloadUrl(
+    @User() user: any,
+    @Param("id") id: string,
+    @Param("attachmentId") attachmentId: string,
+  ) {
+    if (!user) throw new UnauthorizedException("Authentication required");
+    return this.tasksService.getAttachmentDownloadUrl(
+      user as UserItem,
+      id,
+      attachmentId,
+    );
+  }
+
   @Get(":id")
   @ApiOperation({ summary: "Get a task by ID" })
   findOne(@User() user: any, @Param("id") id: string) {

@@ -1,18 +1,22 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { StatsGrid, ActivityFeed, ProjectCard, TeamOverview } from '@/components/dashboard/stats-cards'
 import { TasksChart, StatusDistribution, ProjectProgress } from '@/components/dashboard/charts'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
-import { Plus, Filter, Download } from 'lucide-react'
-import type { DashboardStats, Project, Task } from '@/lib/types'
-import { mockActivity } from '@/lib/mock-data'
+import { Plus } from 'lucide-react'
+import type { ActivityItem, DashboardStats, Project, Task } from '@/lib/types'
 import { api, ApiError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
+import {
+  buildProjectProgressData,
+  buildStatusDistributionData,
+  buildWeeklyTaskData,
+} from '@/lib/dashboard-chart-data'
 
 function computeStats(tasks: Task[], projects: Project[], members: number): DashboardStats {
   const totalTasks = tasks.length
@@ -40,20 +44,23 @@ export default function DashboardPage() {
   const { teamId } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
+  const [activity, setActivity] = useState<ActivityItem[]>([])
   const [memberCount, setMemberCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [p, t, u] = await Promise.all([
+      const [p, t, u, a] = await Promise.all([
         api.listProjects(teamId),
         api.loadTasksWithMeta(teamId),
         api.listUsers(teamId),
+        api.listActivity(teamId, 10).catch(() => [] as ActivityItem[]),
       ])
       setProjects(p)
       setTasks(t)
       setMemberCount(u.length)
+      setActivity(a)
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : 'Could not load dashboard')
     } finally {
@@ -66,6 +73,9 @@ export default function DashboardPage() {
   }, [load])
 
   const stats = computeStats(tasks, projects, memberCount)
+  const weeklyData = useMemo(() => buildWeeklyTaskData(tasks), [tasks])
+  const statusData = useMemo(() => buildStatusDistributionData(tasks), [tasks])
+  const projectProgressData = useMemo(() => buildProjectProgressData(projects), [projects])
 
   return (
     <motion.div
@@ -82,14 +92,6 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="gap-2" type="button">
-            <Filter className="w-4 h-4" />
-            Filter
-          </Button>
-          <Button variant="outline" className="gap-2" type="button">
-            <Download className="w-4 h-4" />
-            Export
-          </Button>
           <Button className="gap-2" asChild>
             <Link href="/dashboard/tasks">
               <Plus className="w-4 h-4" />
@@ -124,8 +126,8 @@ export default function DashboardPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <TasksChart />
-        <StatusDistribution />
+        <TasksChart data={weeklyData} />
+        <StatusDistribution data={statusData} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -153,12 +155,12 @@ export default function DashboardPage() {
         </div>
         <div className="space-y-6">
           <TeamOverview memberCount={stats.teamMembers} />
-          <ActivityFeed activities={mockActivity.slice(0, 5)} />
+          <ActivityFeed activities={activity.slice(0, 5)} />
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ProjectProgress />
+        <ProjectProgress data={projectProgressData} />
       </div>
     </motion.div>
   )

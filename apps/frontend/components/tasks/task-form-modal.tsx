@@ -24,8 +24,11 @@ import type { Project, Task, TaskPriority, TaskStatus, User } from '@/lib/types'
 import { api, ApiError } from '@/lib/api/client'
 import {
   FileUploadDropzone,
+  patchStagedUploads,
   type StagedUpload,
 } from '@/components/upload/file-upload-dropzone'
+import { uploadTaskAttachments } from '@/lib/upload/task-attachments'
+import { TaskAttachmentsPanel } from '@/components/tasks/task-attachments-panel'
 
 interface TaskFormModalProps {
   open: boolean
@@ -112,7 +115,7 @@ export function TaskFormModal({
         })
         toast.success('Task updated')
       } else {
-        await api.createTask({
+        const created = await api.createTask({
           title,
           description,
           priority,
@@ -121,14 +124,53 @@ export function TaskFormModal({
           teamId,
           projectId,
           status,
-          attachments: uploads.length
-            ? uploads.map((u) => ({
-                attachmentId: u.id,
-                originalKey: u.key,
-                uploadedAt: new Date().toISOString(),
-              }))
-            : undefined,
         })
+
+        const pendingFiles = uploads
+          .filter((u) => u.status === 'staged')
+          .map((u) => u.file)
+
+        if (pendingFiles.length > 0) {
+          try {
+            const stagedItems = uploads.filter((u) => u.status === 'staged')
+            for (const item of stagedItems) {
+              setUploads((prev) =>
+                patchStagedUploads(prev, item.id, {
+                  status: 'uploading',
+                  progress: 0,
+                }),
+              )
+              await uploadTaskAttachments(
+                created.taskId,
+                [item.file],
+                (_idx, percent) => {
+                  setUploads((prev) =>
+                    patchStagedUploads(prev, item.id, {
+                      progress: percent,
+                      status: 'uploading',
+                    }),
+                  )
+                },
+              )
+              setUploads((prev) =>
+                patchStagedUploads(prev, item.id, {
+                  status: 'complete',
+                  progress: 100,
+                }),
+              )
+            }
+          } catch (uploadErr) {
+            const msg =
+              uploadErr instanceof ApiError
+                ? uploadErr.message
+                : 'Task created but file upload failed'
+            toast.error(msg)
+            onSaved()
+            onOpenChange(false)
+            return
+          }
+        }
+
         toast.success('Task created')
       }
       onSaved()
@@ -245,12 +287,29 @@ export function TaskFormModal({
               onChange={(e) => setDueDate(e.target.value)}
             />
           </div>
-          {!isEdit && (
-            <div className="space-y-2">
-              <Label>Attachments</Label>
+          <div className="space-y-2">
+            <Label>Attachments</Label>
+            {isEdit && task ? (
+              <p className="text-xs text-muted-foreground mb-2">
+                Save task fields above, then add files below (uploads go to S3).
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground mb-2">
+                Files upload to S3 after the task is created.
+              </p>
+            )}
+            {!isEdit ? (
               <FileUploadDropzone value={uploads} onChange={setUploads} />
-            </div>
-          )}
+            ) : (
+              task && (
+                <TaskAttachmentsPanel
+                  taskId={task.id}
+                  attachments={task.attachments ?? []}
+                  onAttachmentsChange={onSaved}
+                />
+              )
+            )}
+          </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"

@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth-context'
 import type { UserRole } from '@/lib/types'
 import { toast } from 'sonner'
 import { ApiError } from '@/lib/api/client'
+import { getPasswordValidationError } from '@/lib/password-validation'
 import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,8 +37,19 @@ export default function SignupPage() {
     role: 'employee',
     company: '',
   })
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    const passwordIssue = getPasswordValidationError(formData.password)
+    if (passwordIssue) {
+      setPasswordError(passwordIssue)
+      toast.error(passwordIssue)
+      return
+    }
+    setPasswordError(null)
+
     try {
       await signup(
         formData.name,
@@ -55,6 +67,9 @@ export default function SignupPage() {
 
   const updateFormData = (key: string, value: string) => {
     setFormData((prev) => ({ ...prev, [key]: value }))
+    if (key === 'password' && passwordError) {
+      setPasswordError(getPasswordValidationError(value))
+    }
   }
 
   return (
@@ -160,12 +175,19 @@ export default function SignupPage() {
                     value={formData.password}
                     onChange={(e) => updateFormData('password', e.target.value)}
                     className="pl-10"
+                    aria-invalid={!!passwordError}
+                    aria-describedby="password-requirements password-error"
                     required
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Must be at least 8 characters with a number and symbol
+                <p id="password-requirements" className="text-xs text-muted-foreground">
+                  At least 8 characters with uppercase, lowercase, a number, and a special character.
                 </p>
+                {passwordError ? (
+                  <p id="password-error" className="text-xs text-destructive" role="alert">
+                    {passwordError}
+                  </p>
+                ) : null}
               </div>
 
               <Button type="submit" className="w-full gap-2" disabled={isLoading}>

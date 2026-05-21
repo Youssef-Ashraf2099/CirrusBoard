@@ -4,6 +4,7 @@ import type {
   Notification,
   Project,
   Task,
+  TaskAttachment,
   TaskPriority,
   TaskStatus,
   Team,
@@ -43,11 +44,23 @@ export type ApiTaskAttachment = {
   originalKey: string
   uploadedAt: string
   thumbnailKey?: string
+  thumbnailUrl?: string
+  filename?: string
+  path?: string
+  contentType?: string
   name?: string
   url?: string
   mimeType?: string
   size?: number
   uploadedBy?: string
+  version?: number
+}
+
+export type TaskUploadPresignResponse = {
+  uploadUrl: string
+  key: string
+  objectUrl: string
+  attachment: ApiTaskAttachment
 }
 
 export type ApiTask = {
@@ -101,6 +114,27 @@ export type ApiActivity = {
   target: string
   targetId: string
   createdAt?: string
+}
+
+export type ApiAuditLog = {
+  PK?: string
+  SK?: string
+  action: string
+  actorId: string
+  oldValue?: string
+  newValue?: string
+  createdAt: string
+}
+
+export type TaskAuditLog = {
+  id: string
+  taskId: string
+  action: string
+  actorId: string
+  actorName?: string
+  oldValue?: string
+  newValue?: string
+  createdAt: string
 }
 
 export type ApiComment = {
@@ -171,6 +205,24 @@ export function mapApiUserToUser(u: ApiUser): User {
   }
 }
 
+export function mapApiAttachmentToTaskAttachment(
+  taskId: string,
+  a: ApiTaskAttachment,
+): TaskAttachment {
+  return {
+    id: a.attachmentId,
+    taskId,
+    name: a.filename ?? a.name ?? a.originalKey.split('/').pop() ?? 'file',
+    url: a.path ?? a.url ?? '',
+    type: a.contentType ?? a.mimeType ?? 'application/octet-stream',
+    size: a.size ?? 0,
+    uploadedBy: a.uploadedBy ?? '',
+    createdAt: a.uploadedAt,
+    originalKey: a.originalKey,
+    thumbnailUrl: a.thumbnailUrl,
+  }
+}
+
 export function mapApiProjectToProject(p: ApiProject): Project {
   const status =
     p.status === 'ARCHIVED'
@@ -215,6 +267,9 @@ export function mapApiTaskToTask(
     tags: t.tags ?? [],
     commentsCount: commentCount,
     attachmentsCount: t.attachments?.length ?? 0,
+    attachments: (t.attachments ?? []).map((a) =>
+      mapApiAttachmentToTaskAttachment(t.taskId, a),
+    ),
     createdAt: t.createdAt ?? new Date().toISOString(),
     updatedAt: t.updatedAt ?? new Date().toISOString(),
   }
@@ -312,6 +367,24 @@ export function mapApiActivityToActivity(
     target: a.target,
     targetId: a.targetId,
     createdAt: a.createdAt ?? new Date().toISOString(),
+  }
+}
+
+export function mapApiAuditLogToTaskAuditLog(
+  taskId: string,
+  row: ApiAuditLog,
+  usersById: Map<string, User>,
+): TaskAuditLog {
+  const actor = usersById.get(row.actorId)
+  return {
+    id: row.SK ?? row.createdAt,
+    taskId,
+    action: row.action,
+    actorId: row.actorId,
+    actorName: actor?.name,
+    oldValue: row.oldValue,
+    newValue: row.newValue,
+    createdAt: row.createdAt,
   }
 }
 

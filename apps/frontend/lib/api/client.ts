@@ -1,6 +1,7 @@
 import type { TaskPriority, TaskStatus } from "@/lib/types";
 import {
   mapApiActivityToActivity,
+  mapApiAuditLogToTaskAuditLog,
   mapApiCommentToComment,
   mapApiNotificationToNotification,
   mapApiProjectToProject,
@@ -11,12 +12,16 @@ import {
   mapTaskToBackendPatchBody,
   mapUiTaskStatusToApi,
   type ApiActivity,
+  type ApiAuditLog,
   type ApiComment,
+  type TaskAuditLog,
   type ApiNotification,
   type ApiProject,
   type ApiTask,
+  type ApiTaskAttachment,
   type ApiTeam,
   type ApiUser,
+  type TaskUploadPresignResponse,
 } from "@/lib/api/mappers";
 import type {
   ActivityItem,
@@ -591,15 +596,150 @@ export const api = {
     });
   },
 
-  async assignTask(id: string, assigneeId: string) {
-    return request<ApiTask>(`/api/tasks/${encodeURIComponent(id)}/assign`, {
-      method: "PATCH",
-      json: { assigneeId },
-    });
+  async assignTask(id: string, assigneeId: string): Promise<Task> {
+    const raw = await request<ApiTask>(
+      `/api/tasks/${encodeURIComponent(id)}/assign`,
+      {
+        method: "PATCH",
+        json: { assigneeId },
+      },
+    );
+    const users = await this.listUsers().catch(() => []);
+    return mapApiTaskToTask(raw, buildUserMap(users), 0);
+  },
+
+  async listAuditLogsForTask(taskId: string): Promise<TaskAuditLog[]> {
+    const rows = await request<ApiAuditLog[]>(
+      `/api/audit-logs/task/${encodeURIComponent(taskId)}`,
+    );
+    const users = await this.listUsers().catch(() => []);
+    const map = buildUserMap(users);
+    return rows.map((r) => mapApiAuditLogToTaskAuditLog(taskId, r, map));
+  },
+
+  async createAuditLog(
+    taskId: string,
+    input: {
+      action: string;
+      actorId: string;
+      oldValue?: string;
+      newValue?: string;
+    },
+  ): Promise<TaskAuditLog> {
+    const raw = await request<ApiAuditLog>(
+      `/api/audit-logs/task/${encodeURIComponent(taskId)}`,
+      {
+        method: "POST",
+        json: { taskId, ...input },
+      },
+    );
+    const users = await this.listUsers().catch(() => []);
+    return mapApiAuditLogToTaskAuditLog(
+      taskId,
+      raw,
+      buildUserMap(users),
+    );
+  },
+
+  async resizeTaskAttachment(
+    taskId: string,
+    body: { attachmentId?: string; key?: string; functionName?: string },
+  ): Promise<unknown> {
+    return request(
+      `/api/tasks/${encodeURIComponent(taskId)}/resize`,
+      { method: "POST", json: body },
+    );
   },
 
   async deleteTask(id: string) {
     await request(`/api/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
+  async requestTaskUploadUrl(
+    taskId: string,
+    body: { filename: string; contentType: string },
+  ): Promise<TaskUploadPresignResponse> {
+    return request<TaskUploadPresignResponse>(
+      `/api/tasks/${encodeURIComponent(taskId)}/upload-url`,
+      { method: "POST", json: body },
+    );
+  },
+
+  async confirmTaskUpload(
+    taskId: string,
+    body: {
+      attachmentId: string;
+      key: string;
+      eTag?: string;
+      size?: number;
+    },
+  ): Promise<ApiTask> {
+    return request<ApiTask>(
+      `/api/tasks/${encodeURIComponent(taskId)}/upload-complete`,
+      { method: "POST", json: body },
+    );
+  },
+
+  async getAttachmentDownloadUrl(
+    taskId: string,
+    attachmentId: string,
+  ): Promise<{ url: string; expiresIn: number }> {
+    return request<{ url: string; expiresIn: number }>(
+      `/api/tasks/${encodeURIComponent(taskId)}/attachments/${encodeURIComponent(attachmentId)}/download-url`,
+    );
+  },
+
+  /**
+   * PUT file bytes directly to S3 (not through Next proxy). Requires bucket CORS.
+   */
+  putFileToPresignedUrl(
+    uploadUrl: string,
+    file: File,
+    onProgress?: (percent: number) => void,
+  ): Promise<string | null> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", uploadUrl);
+      xhr.setRequestHeader(
+        "Content-Type",
+        file.type || "application/octet-stream",
+      );
+
+      if (onProgress) {
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable) {
+            onProgress(Math.round((ev.loaded / ev.total) * 100));
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const raw = xhr.getResponseHeader("ETag");
+          resolve(raw ? raw.replace(/"/g, "") : null);
+        } else {
+          reject(
+            new ApiError(
+              xhr.status,
+              `S3 upload failed (${xhr.status})`,
+              xhr.responseText,
+            ),
+          );
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(
+          new ApiError(
+            0,
+            "S3 upload failed — check bucket CORS and network",
+            null,
+          ),
+        );
+      };
+
+      xhr.send(file);
+    });
   },
 
   async listComments(taskId: string): Promise<Comment[]> {
@@ -654,7 +794,10 @@ export const api = {
   async hydrateTasks(tasks: ApiTask[], teamId: string): Promise<Task[]> {
     const users = await this.listUsers(teamId).catch(() => []);
     const userMap = buildUserMap(users);
-    return tasks.map((t) => mapApiTaskToTask(t, userMap, 0));
+    const counts = await fetchCommentCountsForTasks(tasks.map((t) => t.taskId));
+    return tasks.map((t) =>
+      mapApiTaskToTask(t, userMap, counts.get(t.taskId) ?? 0),
+    );
   },
 
   async loadTasksWithMeta(teamId: string): Promise<Task[]> {
@@ -662,3 +805,22 @@ export const api = {
     return this.hydrateTasks(raw, teamId);
   },
 };
+
+async function fetchCommentCountsForTasks(
+  taskIds: string[],
+): Promise<Map<string, number>> {
+  if (taskIds.length === 0) return new Map();
+  const pairs = await Promise.all(
+    taskIds.map(async (taskId) => {
+      try {
+        const raw = await request<ApiComment[]>(
+          `/api/comments/task/${encodeURIComponent(taskId)}`,
+        );
+        return [taskId, raw.length] as const;
+      } catch {
+        return [taskId, 0] as const;
+      }
+    }),
+  );
+  return new Map(pairs);
+}

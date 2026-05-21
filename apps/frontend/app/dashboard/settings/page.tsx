@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useTheme } from 'next-themes'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,22 +11,12 @@ import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   User,
   Bell,
   Shield,
   Palette,
-  Globe,
-  CreditCard,
-  Building,
   Mail,
   Lock,
   Smartphone,
@@ -35,12 +25,21 @@ import {
   Monitor,
   Save,
   Upload,
+  Loader2,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
+import { api, ApiError } from '@/lib/api/client'
+import { toast } from 'sonner'
 
 export default function SettingsPage() {
-  const { user } = useAuth()
+  const { user, updateUser, refreshUser } = useAuth()
   const { theme, setTheme } = useTheme()
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [savingPassword, setSavingPassword] = useState(false)
   const [notifications, setNotifications] = useState({
     email: true,
     push: true,
@@ -49,11 +48,53 @@ export default function SettingsPage() {
     comments: true,
     deadlines: true,
   })
-
   const [appearance, setAppearance] = useState({
     compactMode: false,
     animationsEnabled: true,
   })
+
+  useEffect(() => {
+    setName(user?.name ?? '')
+    setEmail(user?.email ?? '')
+  }, [user?.name, user?.email])
+
+  async function saveProfile() {
+    if (!user?.id) return
+    setSavingProfile(true)
+    try {
+      const updated = await api.updateUser(user.id, { name, email })
+      updateUser(updated)
+      await refreshUser()
+      toast.success('Profile updated')
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'Could not save profile')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  async function savePassword() {
+    if (!user?.id) return
+    if (!newPassword || newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match')
+      return
+    }
+    setSavingPassword(true)
+    try {
+      await api.updateUser(user.id, { password: newPassword })
+      setNewPassword('')
+      setConfirmPassword('')
+      toast.success('Password updated (Cognito synced when configured)')
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'Could not update password')
+    } finally {
+      setSavingPassword(false)
+    }
+  }
 
   return (
     <motion.div
@@ -62,7 +103,6 @@ export default function SettingsPage() {
       transition={{ duration: 0.5 }}
       className="space-y-6 max-w-4xl"
     >
-        {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">Settings</h1>
           <p className="text-muted-foreground">Manage your account settings and preferences</p>
@@ -88,7 +128,6 @@ export default function SettingsPage() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Profile Tab */}
           <TabsContent value="profile" className="space-y-6">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -101,7 +140,6 @@ export default function SettingsPage() {
                   <CardDescription>Update your personal details and profile picture</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* Avatar */}
                   <div className="flex items-center gap-6">
                     <Avatar className="w-20 h-20 border-2 border-primary/20">
                       <AvatarImage src={user?.avatar} />
@@ -110,49 +148,61 @@ export default function SettingsPage() {
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <Button variant="outline" className="gap-2 mb-2">
+                      <Button variant="outline" className="gap-2 mb-2" type="button" disabled>
                         <Upload className="w-4 h-4" />
                         Change Avatar
                       </Button>
-                      <p className="text-xs text-muted-foreground">JPG, PNG or GIF. Max 2MB.</p>
+                      <p className="text-xs text-muted-foreground">Avatar upload not wired yet.</p>
                     </div>
                   </div>
 
                   <Separator />
 
-                  {/* Form */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="name">Full Name</Label>
-                      <Input id="name" defaultValue={user?.name ?? ''} />
+                      <Input
+                        id="name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
-                      <Input id="email" type="email" defaultValue={user?.email ?? ''} />
+                      <Input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="role">Role</Label>
-                      <Input id="role" defaultValue={user?.role ?? ''} disabled className="capitalize" />
+                      <Input
+                        id="role"
+                        value={user?.role ?? ''}
+                        disabled
+                        className="capitalize"
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="timezone">Timezone</Label>
-                      <Select defaultValue="utc-8">
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select timezone" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="utc-8">Pacific Time (UTC-8)</SelectItem>
-                          <SelectItem value="utc-5">Eastern Time (UTC-5)</SelectItem>
-                          <SelectItem value="utc">UTC</SelectItem>
-                          <SelectItem value="utc+1">Central European Time (UTC+1)</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="team">Team ID</Label>
+                      <Input id="team" value={user?.teamId ?? ''} disabled />
                     </div>
                   </div>
 
                   <div className="flex justify-end">
-                    <Button className="gap-2">
-                      <Save className="w-4 h-4" />
+                    <Button
+                      className="gap-2"
+                      type="button"
+                      onClick={() => void saveProfile()}
+                      disabled={savingProfile || !user}
+                    >
+                      {savingProfile ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
                       Save Changes
                     </Button>
                   </div>
@@ -161,7 +211,6 @@ export default function SettingsPage() {
             </motion.div>
           </TabsContent>
 
-          {/* Notifications Tab */}
           <TabsContent value="notifications" className="space-y-6">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -171,10 +220,11 @@ export default function SettingsPage() {
               <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
                 <CardHeader>
                   <CardTitle className="text-lg">Notification Preferences</CardTitle>
-                  <CardDescription>Choose how you want to be notified</CardDescription>
+                  <CardDescription>
+                    In-app alerts use the bell menu. These toggles are local until a prefs API exists.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* Channels */}
                   <div className="space-y-4">
                     <h4 className="font-medium text-foreground">Notification Channels</h4>
                     <div className="space-y-4">
@@ -209,7 +259,6 @@ export default function SettingsPage() {
 
                   <Separator />
 
-                  {/* Types */}
                   <div className="space-y-4">
                     <h4 className="font-medium text-foreground">Notification Types</h4>
                     <div className="space-y-4">
@@ -239,7 +288,6 @@ export default function SettingsPage() {
             </motion.div>
           </TabsContent>
 
-          {/* Appearance Tab */}
           <TabsContent value="appearance" className="space-y-6">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -252,7 +300,6 @@ export default function SettingsPage() {
                   <CardDescription>Customize the look and feel of the application</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* Theme */}
                   <div className="space-y-4">
                     <h4 className="font-medium text-foreground">Theme</h4>
                     <div className="grid grid-cols-3 gap-4">
@@ -288,7 +335,6 @@ export default function SettingsPage() {
 
                   <Separator />
 
-                  {/* Options */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
@@ -316,7 +362,6 @@ export default function SettingsPage() {
             </motion.div>
           </TabsContent>
 
-          {/* Security Tab */}
           <TabsContent value="security" className="space-y-6">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -326,66 +371,65 @@ export default function SettingsPage() {
               <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
                 <CardHeader>
                   <CardTitle className="text-lg">Security Settings</CardTitle>
-                  <CardDescription>Manage your account security and authentication</CardDescription>
+                  <CardDescription>
+                    Password changes are saved via the API and synced to Cognito when enabled.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* Password */}
                   <div className="space-y-4">
                     <h4 className="font-medium text-foreground">Change Password</h4>
                     <div className="grid gap-4 max-w-md">
                       <div className="space-y-2">
-                        <Label htmlFor="current-password">Current Password</Label>
-                        <Input id="current-password" type="password" />
-                      </div>
-                      <div className="space-y-2">
                         <Label htmlFor="new-password">New Password</Label>
-                        <Input id="new-password" type="password" />
+                        <Input
+                          id="new-password"
+                          type="password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          autoComplete="new-password"
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="confirm-password">Confirm New Password</Label>
-                        <Input id="confirm-password" type="password" />
+                        <Input
+                          id="confirm-password"
+                          type="password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          autoComplete="new-password"
+                        />
                       </div>
-                      <Button className="w-fit">Update Password</Button>
+                      <Button
+                        className="w-fit gap-2"
+                        type="button"
+                        onClick={() => void savePassword()}
+                        disabled={savingPassword || !user}
+                      >
+                        {savingPassword ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Lock className="w-4 h-4" />
+                        )}
+                        Update Password
+                      </Button>
                     </div>
                   </div>
 
                   <Separator />
 
-                  {/* 2FA */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Lock className="w-5 h-5 text-muted-foreground" />
                         <div>
                           <p className="font-medium text-foreground">Two-Factor Authentication</p>
-                          <p className="text-sm text-muted-foreground">Add an extra layer of security</p>
+                          <p className="text-sm text-muted-foreground">Coming soon</p>
                         </div>
                       </div>
                       <Badge variant="outline" className="text-warning border-warning/30">
                         Not Enabled
                       </Badge>
                     </div>
-                    <Button variant="outline">Enable 2FA</Button>
-                  </div>
-
-                  <Separator />
-
-                  {/* Sessions */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-foreground">Active Sessions</h4>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                        <div className="flex items-center gap-3">
-                          <Monitor className="w-5 h-5 text-muted-foreground" />
-                          <div>
-                            <p className="font-medium text-foreground">Chrome on MacOS</p>
-                            <p className="text-xs text-muted-foreground">Current session</p>
-                          </div>
-                        </div>
-                        <Badge variant="outline" className="text-success border-success/30">Active</Badge>
-                      </div>
-                    </div>
-                    <Button variant="outline" className="text-destructive">Sign Out All Other Sessions</Button>
                   </div>
                 </CardContent>
               </Card>

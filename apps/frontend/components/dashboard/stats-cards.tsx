@@ -155,6 +155,11 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {activities.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">
+            No recent activity for this team yet.
+          </p>
+        ) : null}
         {activities.map((activity, index) => (
           <motion.div
             key={activity.id}
@@ -284,21 +289,6 @@ export function TeamOverview({ memberCount }: TeamOverviewProps) {
           >
             <Users className="w-8 h-8 text-primary" />
           </motion.div>
-        </div>
-        
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div className="p-3 rounded-lg bg-success/10">
-            <p className="text-lg font-semibold text-success">4</p>
-            <p className="text-xs text-muted-foreground">Online</p>
-          </div>
-          <div className="p-3 rounded-lg bg-warning/10">
-            <p className="text-lg font-semibold text-warning">1</p>
-            <p className="text-xs text-muted-foreground">Away</p>
-          </div>
-          <div className="p-3 rounded-lg bg-muted">
-            <p className="text-lg font-semibold text-muted-foreground">1</p>
-            <p className="text-xs text-muted-foreground">Offline</p>
-          </div>
         </div>
       </CardContent>
     </Card>
