@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { Upload, X, FileIcon, CheckCircle2, AlertCircle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, createId } from '@/lib/utils'
 
 export type StagedUploadStatus = 'staged' | 'uploading' | 'complete' | 'error'
 
@@ -52,7 +52,7 @@ export function FileUploadDropzone({
         if (valueRef.current.length + additions.length >= maxFiles) break
         const file = fileList[i]
         additions.push({
-          id: crypto.randomUUID(),
+          id: createId(),
           file,
           name: file.name,
           size: file.size,
