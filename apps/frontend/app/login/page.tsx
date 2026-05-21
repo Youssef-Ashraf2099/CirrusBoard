@@ -86,9 +86,9 @@ export default function LoginPage() {
                   <Label htmlFor="password">Password</Label>
                   <Link
                     href="/forgot-password"
-                    className="text-sm text-primary hover:underline"
+                    className="text-sm text-muted-foreground hover:text-foreground hover:underline"
                   >
-                    Forgot password?
+                    Change password
                   </Link>
                 </div>
                 <div className="relative">

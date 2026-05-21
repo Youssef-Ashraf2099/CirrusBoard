@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { Upload, X, FileIcon, CheckCircle2, AlertCircle } from 'lucide-react'
-import { cn, createId } from '@/lib/utils'
+import { cn, createId, formatBytes } from '@/lib/utils'
 
 export type StagedUploadStatus = 'staged' | 'uploading' | 'complete' | 'error'
 
@@ -26,6 +26,8 @@ interface FileUploadDropzoneProps {
   maxFiles?: number
   className?: string
   disabled?: boolean
+  /** Smaller control when files already exist on the task. */
+  variant?: 'default' | 'compact'
 }
 
 export function FileUploadDropzone({
@@ -35,6 +37,7 @@ export function FileUploadDropzone({
   maxFiles = 8,
   className,
   disabled = false,
+  variant = 'default',
 }: FileUploadDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const valueRef = useRef(value)
@@ -76,58 +79,95 @@ export function FileUploadDropzone({
     onChange(next)
   }
 
+  const input = (
+    <input
+      ref={inputRef}
+      type="file"
+      className="hidden"
+      multiple
+      disabled={disabled}
+      accept={accept}
+      onChange={(e) => {
+        addFiles(e.target.files)
+        e.target.value = ''
+      }}
+    />
+  )
+
+  const dropHandlers = {
+    onDragOver: (e: React.DragEvent) => {
+      if (disabled) return
+      e.preventDefault()
+      setDragOver(true)
+    },
+    onDragLeave: () => setDragOver(false),
+    onDrop: (e: React.DragEvent) => {
+      if (disabled) return
+      e.preventDefault()
+      setDragOver(false)
+      addFiles(e.dataTransfer.files)
+    },
+  }
+
   return (
-    <div className={cn('space-y-3', className)}>
-      <div
-        role="button"
-        tabIndex={disabled ? -1 : 0}
-        onKeyDown={(e) => {
-          if (disabled) return
-          if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click()
-        }}
-        onDragOver={(e) => {
-          if (disabled) return
-          e.preventDefault()
-          setDragOver(true)
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          if (disabled) return
-          e.preventDefault()
-          setDragOver(false)
-          addFiles(e.dataTransfer.files)
-        }}
-        onClick={() => !disabled && inputRef.current?.click()}
-        className={cn(
-          'rounded-xl border-2 border-dashed p-8 text-center transition-colors',
-          disabled
-            ? 'opacity-50 cursor-not-allowed'
-            : 'cursor-pointer',
-          dragOver
-            ? 'border-primary bg-primary/5'
-            : 'border-border hover:border-primary/40 bg-muted/20',
-        )}
-      >
-        <Upload className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-        <p className="text-sm font-medium text-foreground">
-          Drag & drop files here
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          or click to browse — files upload to S3 after the task is saved
-        </p>
-        <input
-          ref={inputRef}
-          type="file"
-          className="hidden"
-          multiple
-          disabled={disabled}
-          accept={accept}
-          onChange={(e) => {
-            addFiles(e.target.files)
-            e.target.value = ''
+    <div className={cn('space-y-2', className)}>
+      {variant === 'compact' ? (
+        <div
+          {...dropHandlers}
+          className={cn(
+            'flex flex-wrap items-center gap-2 rounded-lg border border-dashed px-3 py-2 transition-colors',
+            disabled ? 'opacity-50' : 'cursor-pointer',
+            dragOver
+              ? 'border-primary bg-primary/5'
+              : 'border-border/80 hover:border-primary/40 bg-muted/10',
+          )}
+          onClick={() => !disabled && inputRef.current?.click()}
+        >
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 pointer-events-none"
+            tabIndex={-1}
+          >
+            <Upload className="w-3.5 h-3.5" />
+            Add files
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            or drag here
+          </span>
+          {input}
+        </div>
+      ) : (
+        <div
+          role="button"
+          tabIndex={disabled ? -1 : 0}
+          onKeyDown={(e) => {
+            if (disabled) return
+            if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click()
           }}
-        />
-      </div>
+          {...dropHandlers}
+          onClick={() => !disabled && inputRef.current?.click()}
+          className={cn(
+            'rounded-xl border-2 border-dashed p-8 text-center transition-colors',
+            disabled
+              ? 'opacity-50 cursor-not-allowed'
+              : 'cursor-pointer',
+            dragOver
+              ? 'border-primary bg-primary/5'
+              : 'border-border hover:border-primary/40 bg-muted/20',
+          )}
+        >
+          <Upload className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+          <p className="text-sm font-medium text-foreground">
+            Drag & drop files here
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            or click to browse
+          </p>
+          {input}
+        </div>
+      )}
 
       {value.length > 0 && (
         <ul className="space-y-2">
@@ -152,7 +192,7 @@ export function FileUploadDropzone({
                   />
                 )}
                 <p className="text-xs text-muted-foreground mt-1">
-                  {(f.size / 1024).toFixed(1)} KB
+                  {formatBytes(f.size)}
                   {f.status === 'uploading' && ` · ${Math.round(f.progress)}%`}
                   {f.status === 'complete' && ' · uploaded'}
                   {f.status === 'error' && f.errorMessage

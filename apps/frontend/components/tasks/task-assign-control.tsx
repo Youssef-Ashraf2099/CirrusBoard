@@ -28,50 +28,47 @@ export function TaskAssignControl({
   const [assigneeId, setAssigneeId] = useState(task.assigneeId ?? '')
   const [saving, setSaving] = useState(false)
 
-  async function handleAssign() {
-    if (!assigneeId) {
-      toast.error('Select an assignee')
-      return
-    }
+  const teamUsers = users.filter((u) => u.teamId === task.teamId)
+
+  async function onSelectChange(nextId: string) {
+    setAssigneeId(nextId)
+    if (!nextId || nextId === task.assigneeId) return
     setSaving(true)
     try {
-      await api.assignTask(task.id, assigneeId)
-      toast.success('Task assigned')
+      await api.assignTask(task.id, nextId)
+      toast.success('Assignee updated')
       onAssigned()
     } catch (e) {
+      setAssigneeId(task.assigneeId ?? '')
       toast.error(e instanceof ApiError ? e.message : 'Could not assign task')
     } finally {
       setSaving(false)
     }
   }
 
-  const teamUsers = users.filter((u) => u.teamId === task.teamId)
-
   return (
-    <div className="space-y-2">
-      <Select value={assigneeId} onValueChange={setAssigneeId}>
-        <SelectTrigger className="h-8 text-sm">
-          <SelectValue placeholder="Select assignee" />
-        </SelectTrigger>
-        <SelectContent>
-          {teamUsers.map((u) => (
-            <SelectItem key={u.id} value={u.id}>
-              {u.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button
-        type="button"
-        size="sm"
-        variant="secondary"
-        className="w-full"
-        disabled={saving || assigneeId === task.assigneeId}
-        onClick={() => void handleAssign()}
-      >
-        {saving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-        Assign (manager API)
-      </Button>
-    </div>
+    <Select
+      value={assigneeId}
+      onValueChange={(v) => void onSelectChange(v)}
+      disabled={saving}
+    >
+      <SelectTrigger className="h-9 w-full max-w-[220px]">
+        {saving ? (
+          <span className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Saving…
+          </span>
+        ) : (
+          <SelectValue placeholder="Unassigned" />
+        )}
+      </SelectTrigger>
+      <SelectContent>
+        {teamUsers.map((u) => (
+          <SelectItem key={u.id} value={u.id}>
+            {u.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }

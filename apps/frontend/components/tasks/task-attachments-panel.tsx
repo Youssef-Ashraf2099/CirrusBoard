@@ -15,12 +15,14 @@ import {
   type StagedUpload,
 } from '@/components/upload/file-upload-dropzone'
 import { uploadTaskAttachments } from '@/lib/upload/task-attachments'
+import { formatBytes } from '@/lib/utils'
 
 interface TaskAttachmentsPanelProps {
   taskId: string
   attachments: TaskAttachment[]
   onAttachmentsChange: () => void
   allowUpload?: boolean
+  compactUpload?: boolean
 }
 
 export function TaskAttachmentsPanel({
@@ -28,6 +30,7 @@ export function TaskAttachmentsPanel({
   attachments,
   onAttachmentsChange,
   allowUpload = true,
+  compactUpload,
 }: TaskAttachmentsPanelProps) {
   const [displayAttachments, setDisplayAttachments] =
     useState<TaskAttachment[]>(attachments)
@@ -147,61 +150,64 @@ export function TaskAttachmentsPanel({
   }
 
   const hasStaged = staged.some((s) => s.status === 'staged')
+  const useCompactDropzone =
+    compactUpload ?? displayAttachments.length > 0
 
   return (
     <div className="space-y-3">
       {displayAttachments.length === 0 ? (
         <p className="text-sm text-muted-foreground">No attachments yet.</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="divide-y divide-border/60 rounded-lg border border-border/60 overflow-hidden">
           {displayAttachments.map((att) => (
             <li
               key={att.id}
-              className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm"
+              className="flex items-center justify-between gap-3 px-4 py-3 bg-card/50 text-sm"
             >
-              <div className="min-w-0">
-                <p className="font-medium truncate">{att.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {att.size > 0
-                    ? `${(att.size / 1024).toFixed(1)} KB`
-                    : 'Size pending'}
+              <div className="min-w-0 flex-1">
+                <p className="font-medium truncate text-foreground">
+                  {att.name}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {att.size > 0 ? formatBytes(att.size) : 'Size pending'}
                   {' · '}
                   {new Date(att.createdAt).toLocaleDateString()}
                 </p>
               </div>
-              <div className="flex shrink-0 gap-1">
+              <div className="flex shrink-0 gap-1.5">
                 {canResize && (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    className="gap-1"
+                    className="h-8 px-2"
                     disabled={resizingId === att.id}
                     onClick={() => void handleResize(att)}
-                    title="Invoke Lambda image resize"
+                    title="Resize image"
                   >
                     {resizingId === att.id ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      <ImageIcon className="w-3.5 h-3.5" />
+                      <ImageIcon className="w-4 h-4" />
                     )}
-                    Resize
                   </Button>
                 )}
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
-                  className="gap-1"
+                  className="h-8"
                   disabled={openingId === att.id}
                   onClick={() => void handleDownload(att)}
                 >
                   {openingId === att.id ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    <Download className="w-3.5 h-3.5" />
+                    <>
+                      <Download className="w-4 h-4 mr-1" />
+                      Open
+                    </>
                   )}
-                  Open
                 </Button>
               </div>
             </li>
@@ -215,6 +221,7 @@ export function TaskAttachmentsPanel({
             value={staged}
             onChange={setStaged}
             disabled={uploading}
+            variant={useCompactDropzone ? 'compact' : 'default'}
           />
           {hasStaged && (
             <Button
