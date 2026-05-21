@@ -29,8 +29,13 @@ import { api, ApiError } from '@/lib/api/client'
 import { toast } from 'sonner'
 
 export default function SettingsPage() {
-  const { user, updateUser, refreshUser } = useAuth()
-  const { theme, setTheme } = useTheme()
+  const { user, updateUser } = useAuth()
+  const { theme, setTheme, resolvedTheme } = useTheme()
+  const [themeMounted, setThemeMounted] = useState(false)
+
+  useEffect(() => {
+    setThemeMounted(true)
+  }, [])
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
@@ -71,7 +76,8 @@ export default function SettingsPage() {
         email: trimmedEmail,
       })
       updateUser(updated)
-      await refreshUser()
+      setName(updated.name)
+      setEmail(updated.email)
       toast.success('Profile updated')
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : 'Could not save profile')
@@ -259,7 +265,11 @@ export default function SettingsPage() {
       <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
         <CardHeader>
           <CardTitle className="text-lg">Theme</CardTitle>
-          <CardDescription>Applies across the app on this device</CardDescription>
+          <CardDescription>
+            {themeMounted && resolvedTheme
+              ? `Active appearance: ${resolvedTheme}`
+              : 'Applies across the app on this device'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-3">
@@ -275,6 +285,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => setTheme(themeOption.value)}
                 className={`p-3 rounded-lg border-2 transition-all ${
+                  themeMounted &&
                   (theme ?? 'system') === themeOption.value
                     ? 'border-primary bg-primary/10'
                     : 'border-border hover:border-primary/50'
@@ -282,6 +293,7 @@ export default function SettingsPage() {
               >
                 <themeOption.icon
                   className={`w-5 h-5 mx-auto mb-1.5 ${
+                    themeMounted &&
                     (theme ?? 'system') === themeOption.value
                       ? 'text-primary'
                       : 'text-muted-foreground'
