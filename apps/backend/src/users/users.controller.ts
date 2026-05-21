@@ -28,6 +28,25 @@ export class UsersController {
     return this.usersService.login(dto.email, dto.password);
   }
 
+  @Post("refresh")
+  @ApiOperation({ summary: "Refresh Cognito session tokens" })
+  refresh(
+    @Body()
+    body: {
+      email?: string;
+      refreshToken?: string;
+    },
+  ) {
+    const email = body?.email?.trim();
+    const refreshToken = body?.refreshToken?.trim();
+
+    if (!email || !refreshToken) {
+      throw new BadRequestException("email and refreshToken are required");
+    }
+
+    return this.usersService.refreshSession(email, refreshToken);
+  }
+
   @Post()
   @ApiOperation({ summary: "Create a new user" })
   create(@Body() createUserDto: CreateUserDto) {

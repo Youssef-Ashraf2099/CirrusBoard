@@ -17,6 +17,9 @@ const STORAGE_KEY = "taskflow_user";
 const ACCESS_TOKEN_KEY = "cognitoAccessToken";
 const ID_TOKEN_KEY = "cognitoIdToken";
 const REFRESH_TOKEN_KEY = "cognitoRefreshToken";
+const LEGACY_ACCESS_TOKEN_KEY = "accessToken";
+const LEGACY_ID_TOKEN_KEY = "idToken";
+const LEGACY_REFRESH_TOKEN_KEY = "refreshToken";
 
 function storeTokens(tokens?: {
   accessToken?: string;
@@ -26,12 +29,15 @@ function storeTokens(tokens?: {
   if (!tokens) return;
   if (tokens.accessToken) {
     localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);
+    localStorage.setItem(LEGACY_ACCESS_TOKEN_KEY, tokens.accessToken);
   }
   if (tokens.idToken) {
     localStorage.setItem(ID_TOKEN_KEY, tokens.idToken);
+    localStorage.setItem(LEGACY_ID_TOKEN_KEY, tokens.idToken);
   }
   if (tokens.refreshToken) {
     localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+    localStorage.setItem(LEGACY_REFRESH_TOKEN_KEY, tokens.refreshToken);
   }
 }
 
@@ -39,13 +45,21 @@ function clearTokens() {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(ID_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_ID_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
 }
 
 function getStoredTokens() {
   if (typeof window === "undefined") return null;
-  const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-  const idToken = localStorage.getItem(ID_TOKEN_KEY);
-  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+  const accessToken =
+    localStorage.getItem(ACCESS_TOKEN_KEY) ||
+    localStorage.getItem(LEGACY_ACCESS_TOKEN_KEY);
+  const idToken =
+    localStorage.getItem(ID_TOKEN_KEY) || localStorage.getItem(LEGACY_ID_TOKEN_KEY);
+  const refreshToken =
+    localStorage.getItem(REFRESH_TOKEN_KEY) ||
+    localStorage.getItem(LEGACY_REFRESH_TOKEN_KEY);
   return { accessToken, idToken, refreshToken };
 }
 

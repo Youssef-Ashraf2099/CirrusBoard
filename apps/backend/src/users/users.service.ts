@@ -173,6 +173,56 @@ export class UsersService {
     return { user };
   }
 
+  async refreshSession(
+    email: string,
+    refreshToken: string,
+  ): Promise<LoginResponse> {
+    if (!CognitoConfig.userPoolClientId || !CognitoConfig.userPoolId) {
+      throw new UnauthorizedException("Cognito is not configured");
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedRefreshToken = refreshToken.trim();
+    if (!trimmedEmail || !trimmedRefreshToken) {
+      throw new UnauthorizedException("Missing refresh token");
+    }
+
+    const authParams: Record<string, string> = {
+      USERNAME: trimmedEmail,
+      REFRESH_TOKEN: trimmedRefreshToken,
+    };
+
+    const secretHash = this.buildSecretHash(authParams.USERNAME);
+    if (secretHash) authParams.SECRET_HASH = secretHash;
+
+    const response = await this.cognitoClient.send(
+      new InitiateAuthCommand({
+        AuthFlow: "REFRESH_TOKEN_AUTH",
+        ClientId: CognitoConfig.userPoolClientId,
+        AuthParameters: authParams,
+      }),
+    );
+
+    const result = response.AuthenticationResult;
+    if (!result?.AccessToken || !result?.IdToken) {
+      throw new UnauthorizedException("Cognito refresh failed");
+    }
+
+    const claims = decodeJwtPayload(result.IdToken);
+    const synced = await this.syncFromCognitoClaims(claims);
+
+    return {
+      user: sanitizeUser(synced),
+      tokens: {
+        accessToken: result.AccessToken,
+        idToken: result.IdToken,
+        refreshToken: result.RefreshToken ?? trimmedRefreshToken,
+        expiresIn: result.ExpiresIn,
+        tokenType: result.TokenType,
+      },
+    };
+  }
+
   private async authenticateWithCognito(
     email: string,
     password: string,
