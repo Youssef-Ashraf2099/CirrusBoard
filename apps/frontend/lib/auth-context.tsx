@@ -9,14 +9,14 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import type { User, UserRole } from "@/lib/types";
-import { api, ApiError } from "@/lib/api/client";
+import { api, ApiError, type LoginResult } from "@/lib/api/client";
 import { DEFAULT_TEAM_ID } from "@/lib/config";
 import { mapUiRoleToApi } from "@/lib/api/mappers";
 
 const STORAGE_KEY = "taskflow_user";
-const ACCESS_TOKEN_KEY = "accessToken";
-const ID_TOKEN_KEY = "idToken";
-const REFRESH_TOKEN_KEY = "refreshToken";
+const ACCESS_TOKEN_KEY = "cognitoAccessToken";
+const ID_TOKEN_KEY = "cognitoIdToken";
+const REFRESH_TOKEN_KEY = "cognitoRefreshToken";
 
 function storeTokens(tokens?: {
   accessToken?: string;
@@ -39,6 +39,28 @@ function clearTokens() {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(ID_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+function getStoredTokens() {
+  if (typeof window === "undefined") return null;
+  const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+  const idToken = localStorage.getItem(ID_TOKEN_KEY);
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+  return { accessToken, idToken, refreshToken };
+}
+
+function hasAnyToken() {
+  const tokens = getStoredTokens();
+  return !!(tokens?.accessToken || tokens?.idToken);
+}
+
+function persistSession(result: LoginResult) {
+  setStoredUser(result.user);
+  storeTokens(result.tokens);
+}
+
+function setStoredUser(user: User) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
 }
 
 interface AuthContextType {
@@ -68,6 +90,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const hydrate = async () => {
+      if (!hasAnyToken()) {
+        localStorage.removeItem(STORAGE_KEY);
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
       const raw =
         typeof window !== "undefined"
           ? localStorage.getItem(STORAGE_KEY)
@@ -81,9 +110,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(parsed);
         const fresh = await api.getUser(parsed.id);
         setUser(fresh);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+        setStoredUser(fresh);
       } catch {
         localStorage.removeItem(STORAGE_KEY);
+        clearTokens();
         setUser(null);
       } finally {
         setIsLoading(false);
@@ -96,16 +126,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       const result = await api.login(email, password);
-
-      console.log("LOGIN RESULT:", JSON.stringify(result, null, 2)); // ADD THIS
-
+      persistSession(result);
       setUser(result.user);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(result.user));
-      if (result.tokens?.accessToken || result.tokens?.idToken) {
-        storeTokens(result.tokens);
-      } else {
-        clearTokens();
-      }
       router.push("/dashboard");
     } finally {
       setIsLoading(false);
@@ -120,7 +142,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ) => {
     setIsLoading(true);
     try {
-      // 1. Create user in DB + Cognito
       await api.createUser({
         name,
         email,
@@ -129,13 +150,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         primaryTeamId: DEFAULT_TEAM_ID,
       });
 
-      // 2. Login to get Cognito tokens
       const result = await api.login(email, password);
+      persistSession(result);
       setUser(result.user);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(result.user));
-      if (result.tokens?.accessToken || result.tokens?.idToken) {
-        storeTokens(result.tokens);
-      }
       router.push("/dashboard");
     } finally {
       setIsLoading(false);
@@ -153,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user) {
       const next = { ...user, ...data };
       setUser(next);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      setStoredUser(next);
     }
   };
 
@@ -161,7 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     const next = await api.getUser(user.id);
     setUser(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    setStoredUser(next);
   };
 
   return (
