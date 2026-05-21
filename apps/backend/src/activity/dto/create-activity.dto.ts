@@ -15,4 +15,11 @@ export class CreateActivityDto {
 
   @ApiProperty()
   targetId: string;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Task id for audit storage (defaults to targetId when target is task)',
+  })
+  taskId?: string;
 }

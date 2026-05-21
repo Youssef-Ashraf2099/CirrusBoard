@@ -43,6 +43,9 @@ export const handler = async (event: any) => {
     oldValue: normalizeValue(payload.oldValue),
     newValue: normalizeValue(payload.newValue),
     createdAt: now,
+    teamId: payload.teamId,
+    target: payload.target ?? "task",
+    targetId: payload.targetId ?? taskId,
   };
 
   await docClient.send(
