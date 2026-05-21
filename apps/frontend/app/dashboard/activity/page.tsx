@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Activity, Loader2, Plus } from 'lucide-react'
 import { api, ApiError } from '@/lib/api/client'
+import { logApi, logApiError } from '@/lib/debug-api'
 import type { ActivityItem } from '@/lib/types'
 import { toast } from 'sonner'
 import { isPrivilegedRole } from '@/lib/roles'
@@ -37,11 +38,14 @@ export default function ActivityPage() {
   })
 
   const load = useCallback(async () => {
+    logApi('Activity', 'ActivityPage.load start', { viewTeamId, limit: 50 })
     setLoading(true)
     try {
       const rows = await api.listActivity(viewTeamId, 50)
+      logApi('Activity', 'ActivityPage.load success', { count: rows.length })
       setItems(rows)
     } catch (e) {
+      logApiError('Activity', 'ActivityPage.load', e)
       toast.error(e instanceof ApiError ? e.message : 'Could not load activity')
       setItems([])
     } finally {
@@ -59,20 +63,27 @@ export default function ActivityPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
-    if (!user?.id) return
+    if (!user?.id) {
+      logApi('Activity', 'ActivityPage.handleCreate skipped — no user.id')
+      return
+    }
     setSaving(true)
+    const payload = {
+      teamId: viewTeamId,
+      userId: user.id,
+      action: form.action,
+      target: form.target,
+      targetId: form.targetId,
+    }
+    logApi('Activity', 'ActivityPage.handleCreate start', payload)
     try {
-      await api.createActivity({
-        teamId: viewTeamId,
-        userId: user.id,
-        action: form.action,
-        target: form.target,
-        targetId: form.targetId,
-      })
+      await api.createActivity(payload)
+      logApi('Activity', 'ActivityPage.handleCreate success')
       toast.success('Activity recorded')
       setForm({ action: 'updated', target: 'task', targetId: '' })
       await load()
     } catch (err) {
+      logApiError('Activity', 'ActivityPage.handleCreate', err)
       toast.error(err instanceof ApiError ? err.message : 'Could not record activity')
     } finally {
       setSaving(false)

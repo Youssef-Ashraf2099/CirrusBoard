@@ -55,7 +55,13 @@ export default function DashboardPage() {
         api.listProjects(teamId),
         api.loadTasksWithMeta(teamId),
         api.listUsers(teamId),
-        api.listActivity(teamId, 10).catch(() => [] as ActivityItem[]),
+        api.listActivity(teamId, 10).catch((err) => {
+          console.error(
+            '[CirrusBoard:Activity] DashboardPage.load activity feed failed (non-fatal)',
+            err,
+          )
+          return [] as ActivityItem[]
+        }),
       ])
       setProjects(p)
       setTasks(t)

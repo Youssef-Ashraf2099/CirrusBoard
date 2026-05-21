@@ -39,6 +39,7 @@ import type {
   User as AppUser,
 } from '@/lib/types'
 import { mapApiTaskToTask } from '@/lib/api/mappers'
+import { buildUserMap } from '@/lib/api/client'
 import { TaskAttachmentsPanel } from '@/components/tasks/task-attachments-panel'
 import { TaskAuditLogPanel } from '@/components/tasks/task-audit-log-panel'
 import { TaskAssignControl } from '@/components/tasks/task-assign-control'
@@ -123,8 +124,9 @@ export function TaskDetailModal({
     setDetailLoading(true)
     try {
       const raw = await api.getTask(task.id)
+      const users = await api.listUsers().catch(() => [])
       setDetail(
-        mapApiTaskToTask(raw, new Map(), task.commentsCount),
+        mapApiTaskToTask(raw, buildUserMap(users), task.commentsCount),
       )
       onTaskUpdated?.()
     } catch {

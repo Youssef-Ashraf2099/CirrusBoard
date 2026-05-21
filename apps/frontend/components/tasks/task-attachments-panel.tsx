@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { mapApiTaskToTask } from '@/lib/api/mappers'
+import { api, ApiError, buildUserMap } from '@/lib/api/client'
 import { Button } from '@/components/ui/button'
 import { Download, Upload, Loader2, ImageIcon } from 'lucide-react'
 import { isPrivilegedRole } from '@/lib/roles'
 import { useAuth } from '@/lib/auth-context'
 import type { TaskAttachment } from '@/lib/types'
-import { api, ApiError } from '@/lib/api/client'
 import { toast } from 'sonner'
 import {
   FileUploadDropzone,
@@ -28,12 +29,33 @@ export function TaskAttachmentsPanel({
   onAttachmentsChange,
   allowUpload = true,
 }: TaskAttachmentsPanelProps) {
+  const [displayAttachments, setDisplayAttachments] =
+    useState<TaskAttachment[]>(attachments)
   const [staged, setStaged] = useState<StagedUpload[]>([])
   const [uploading, setUploading] = useState(false)
   const [openingId, setOpeningId] = useState<string | null>(null)
   const [resizingId, setResizingId] = useState<string | null>(null)
   const { user } = useAuth()
   const canResize = isPrivilegedRole(user?.role)
+
+  useEffect(() => {
+    setDisplayAttachments(attachments)
+  }, [attachments])
+
+  const reloadAttachments = useCallback(async () => {
+    try {
+      const raw = await api.getTask(taskId)
+      const users = await api.listUsers().catch(() => [])
+      const mapped = mapApiTaskToTask(raw, buildUserMap(users), 0)
+      setDisplayAttachments(mapped.attachments ?? [])
+      return mapped.attachments ?? []
+    } catch (e) {
+      toast.error(
+        e instanceof ApiError ? e.message : 'Could not refresh attachments',
+      )
+      return null
+    }
+  }, [taskId])
 
   async function handleResize(att: TaskAttachment) {
     setResizingId(att.id)
@@ -80,7 +102,7 @@ export function TaskAttachmentsPanel({
         )
 
         try {
-          await uploadTaskAttachments(
+          const updatedTask = await uploadTaskAttachments(
             taskId,
             [item.file],
             (_idx, percent) => {
@@ -92,6 +114,9 @@ export function TaskAttachmentsPanel({
               )
             },
           )
+          if (updatedTask?.attachments?.length) {
+            setDisplayAttachments(updatedTask.attachments)
+          }
           setStaged((prev) =>
             patchStagedUploads(prev, item.id, {
               status: 'complete',
@@ -112,6 +137,7 @@ export function TaskAttachmentsPanel({
       }
       toast.success('Attachments uploaded')
       setStaged([])
+      await reloadAttachments()
       onAttachmentsChange()
     } catch {
       toast.error('One or more uploads failed')
@@ -124,11 +150,11 @@ export function TaskAttachmentsPanel({
 
   return (
     <div className="space-y-3">
-      {attachments.length === 0 ? (
+      {displayAttachments.length === 0 ? (
         <p className="text-sm text-muted-foreground">No attachments yet.</p>
       ) : (
         <ul className="space-y-2">
-          {attachments.map((att) => (
+          {displayAttachments.map((att) => (
             <li
               key={att.id}
               className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm"

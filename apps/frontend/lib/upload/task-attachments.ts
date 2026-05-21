@@ -1,4 +1,6 @@
-import { api } from '@/lib/api/client'
+import { api, buildUserMap } from '@/lib/api/client'
+import { mapApiTaskToTask } from '@/lib/api/mappers'
+import type { Task } from '@/lib/types'
 
 export type UploadProgressHandler = (
   fileIndex: number,
@@ -8,12 +10,15 @@ export type UploadProgressHandler = (
 
 /**
  * Presign → PUT to S3 → confirm for each file (backend task must already exist).
+ * Returns the task from the last confirm (includes updated attachments).
  */
 export async function uploadTaskAttachments(
   taskId: string,
   files: File[],
   onProgress?: UploadProgressHandler,
-): Promise<void> {
+): Promise<Task | null> {
+  let lastRaw = null as Awaited<ReturnType<typeof api.confirmTaskUpload>> | null
+
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
     const contentType = file.type || 'application/octet-stream'
@@ -29,11 +34,15 @@ export async function uploadTaskAttachments(
       (percent) => onProgress?.(i, percent, file.name),
     )
 
-    await api.confirmTaskUpload(taskId, {
+    lastRaw = await api.confirmTaskUpload(taskId, {
       attachmentId: presign.attachment.attachmentId,
       key: presign.key,
       eTag: eTag ?? undefined,
       size: file.size,
     })
   }
+
+  if (!lastRaw) return null
+  const users = await api.listUsers().catch(() => [])
+  return mapApiTaskToTask(lastRaw, buildUserMap(users), 0)
 }
