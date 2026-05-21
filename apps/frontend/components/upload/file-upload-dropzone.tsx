@@ -3,36 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { Upload, X, FileIcon } from 'lucide-react'
+import { Upload, X, FileIcon, CheckCircle2, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+export type StagedUploadStatus = 'staged' | 'uploading' | 'complete' | 'error'
 
 export type StagedUpload = {
   id: string
+  file: File
   name: string
   size: number
   type: string
   progress: number
-  /** Simulated storage key — wire to S3 in production */
-  key: string
-}
-
-function simulateProgress(
-  id: string,
-  onTick: (id: string, p: number) => void,
-  onDone: (id: string) => void,
-) {
-  let p = 0
-  const t = setInterval(() => {
-    p += Math.random() * 18 + 5
-    if (p >= 100) {
-      p = 100
-      clearInterval(t)
-      onTick(id, 100)
-      onDone(id)
-    } else {
-      onTick(id, p)
-    }
-  }, 120)
+  status: StagedUploadStatus
+  errorMessage?: string
 }
 
 interface FileUploadDropzoneProps {
@@ -41,6 +25,7 @@ interface FileUploadDropzoneProps {
   accept?: string
   maxFiles?: number
   className?: string
+  disabled?: boolean
 }
 
 export function FileUploadDropzone({
@@ -49,6 +34,7 @@ export function FileUploadDropzone({
   accept,
   maxFiles = 8,
   className,
+  disabled = false,
 }: FileUploadDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const valueRef = useRef(value)
@@ -60,46 +46,31 @@ export function FileUploadDropzone({
 
   const addFiles = useCallback(
     (fileList: FileList | null) => {
-      if (!fileList?.length) return
+      if (!fileList?.length || disabled) return
       const additions: StagedUpload[] = []
       for (let i = 0; i < fileList.length; i++) {
         if (valueRef.current.length + additions.length >= maxFiles) break
         const file = fileList[i]
-        const id = crypto.randomUUID()
-        const key = `local/${Date.now()}-${file.name}`
         additions.push({
-          id,
+          id: crypto.randomUUID(),
+          file,
           name: file.name,
           size: file.size,
           type: file.type || 'application/octet-stream',
           progress: 0,
-          key,
+          status: 'staged',
         })
       }
       if (!additions.length) return
-
       const merged = [...valueRef.current, ...additions]
       valueRef.current = merged
       onChange(merged)
-
-      for (const item of additions) {
-        simulateProgress(
-          item.id,
-          (fid, prog) => {
-            const next = valueRef.current.map((f) =>
-              f.id === fid ? { ...f, progress: prog } : f,
-            )
-            valueRef.current = next
-            onChange(next)
-          },
-          () => {},
-        )
-      }
     },
-    [onChange, maxFiles],
+    [onChange, maxFiles, disabled],
   )
 
   const remove = (id: string) => {
+    if (disabled) return
     const next = valueRef.current.filter((f) => f.id !== id)
     valueRef.current = next
     onChange(next)
@@ -109,23 +80,29 @@ export function FileUploadDropzone({
     <div className={cn('space-y-3', className)}>
       <div
         role="button"
-        tabIndex={0}
+        tabIndex={disabled ? -1 : 0}
         onKeyDown={(e) => {
+          if (disabled) return
           if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click()
         }}
         onDragOver={(e) => {
+          if (disabled) return
           e.preventDefault()
           setDragOver(true)
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => {
+          if (disabled) return
           e.preventDefault()
           setDragOver(false)
           addFiles(e.dataTransfer.files)
         }}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => !disabled && inputRef.current?.click()}
         className={cn(
-          'rounded-xl border-2 border-dashed p-8 text-center transition-colors cursor-pointer',
+          'rounded-xl border-2 border-dashed p-8 text-center transition-colors',
+          disabled
+            ? 'opacity-50 cursor-not-allowed'
+            : 'cursor-pointer',
           dragOver
             ? 'border-primary bg-primary/5'
             : 'border-border hover:border-primary/40 bg-muted/20',
@@ -136,13 +113,14 @@ export function FileUploadDropzone({
           Drag & drop files here
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          or click to browse — uploads are staged locally for this demo
+          or click to browse — files upload to S3 after the task is saved
         </p>
         <input
           ref={inputRef}
           type="file"
           className="hidden"
           multiple
+          disabled={disabled}
           accept={accept}
           onChange={(e) => {
             addFiles(e.target.files)
@@ -158,27 +136,57 @@ export function FileUploadDropzone({
               key={f.id}
               className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2"
             >
-              <FileIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+              {f.status === 'complete' ? (
+                <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+              ) : f.status === 'error' ? (
+                <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+              ) : (
+                <FileIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{f.name}</p>
-                <Progress value={f.progress} className="h-1.5 mt-1.5" />
+                {(f.status === 'uploading' || f.status === 'staged') && (
+                  <Progress
+                    value={f.status === 'staged' ? 0 : f.progress}
+                    className="h-1.5 mt-1.5"
+                  />
+                )}
                 <p className="text-xs text-muted-foreground mt-1">
-                  {(f.size / 1024).toFixed(1)} KB · {Math.round(f.progress)}%
+                  {(f.size / 1024).toFixed(1)} KB
+                  {f.status === 'uploading' && ` · ${Math.round(f.progress)}%`}
+                  {f.status === 'complete' && ' · uploaded'}
+                  {f.status === 'error' && f.errorMessage
+                    ? ` · ${f.errorMessage}`
+                    : f.status === 'error'
+                      ? ' · failed'
+                      : ''}
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="shrink-0"
-                onClick={() => remove(f.id)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
+              {f.status !== 'uploading' && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0"
+                  disabled={disabled}
+                  onClick={() => remove(f.id)}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
             </li>
           ))}
         </ul>
       )}
     </div>
   )
+}
+
+/** Update progress/status for staged items by id (used during S3 upload). */
+export function patchStagedUploads(
+  current: StagedUpload[],
+  id: string,
+  patch: Partial<StagedUpload>,
+): StagedUpload[] {
+  return current.map((f) => (f.id === id ? { ...f, ...patch } : f))
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -17,8 +17,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import { Search, Users, Mail, Shield, UserCheck, Crown } from 'lucide-react'
-import type { User } from '@/lib/types'
+import { Search, Users, Mail, Shield, UserCheck, Crown, Info } from 'lucide-react'
+import type { Team, User } from '@/lib/types'
 import { api, ApiError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
@@ -36,10 +36,15 @@ const roleIcons = {
 }
 
 export default function TeamPage() {
-  const { teamId } = useAuth()
+  const { teamId, user: currentUser } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
   const [members, setMembers] = useState<User[]>([])
+  const [teamRecord, setTeamRecord] = useState<Team | null>(null)
+  const [allTeams, setAllTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
+
+  const canManageTeams =
+    currentUser?.role === 'admin' || currentUser?.role === 'manager'
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -47,12 +52,26 @@ export default function TeamPage() {
       const all = await api.listUsers()
       const onTeam = all.filter((u) => u.teamId === teamId)
       setMembers(onTeam.length ? onTeam : all)
+
+      try {
+        const team = await api.getTeam(teamId)
+        setTeamRecord(team)
+      } catch {
+        setTeamRecord(null)
+      }
+
+      if (canManageTeams) {
+        const teams = await api.listTeams().catch(() => [] as Team[])
+        setAllTeams(teams)
+      } else {
+        setAllTeams([])
+      }
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : 'Could not load team')
     } finally {
       setLoading(false)
     }
-  }, [teamId])
+  }, [teamId, canManageTeams])
 
   useEffect(() => {
     void reload()
@@ -75,7 +94,9 @@ export default function TeamPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Team</h1>
           <p className="text-muted-foreground">
-            Members linked to DynamoDB users for team `{teamId}` (GSI)
+            {teamRecord
+              ? `${teamRecord.name} · members with primary team ${teamId}`
+              : `Members with primary team ${teamId} (no Teams table row yet)`}
           </p>
         </div>
         <div className="relative max-w-xs w-full">
@@ -89,6 +110,50 @@ export default function TeamPage() {
         </div>
       </div>
 
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Info className="w-4 h-4 text-primary" />
+            How &quot;Team&quot; works in CirrusBoard
+          </CardTitle>
+          <CardDescription className="text-sm leading-relaxed">
+            This page lists <strong>users</strong> whose <code className="text-xs">primaryTeamId</code> matches
+            your session team (<code className="text-xs">{teamId}</code>). That is the day-to-day &quot;team&quot;
+            for projects and tasks. A separate <strong>Teams</strong> entity in DynamoDB (name, manager,
+            member list) is optional — use User management to assign <code className="text-xs">primaryTeamId</code>.
+            {canManageTeams && ' Admins and managers can see all Teams records below.'}
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
+      {canManageTeams && allTeams.length > 0 && (
+        <Card className="border-border/60">
+          <CardHeader>
+            <CardTitle className="text-lg">Teams registry</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {allTeams.length} team record{allTeams.length === 1 ? '' : 's'} from{' '}
+              <code className="text-xs">GET /api/teams</code>
+            </p>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-sm">
+              {allTeams.map((t) => (
+                <li
+                  key={t.id}
+                  className={cn(
+                    'flex items-center justify-between rounded-lg border px-3 py-2',
+                    t.id === teamId && 'border-primary/40 bg-primary/5',
+                  )}
+                >
+                  <span className="font-medium">{t.name}</span>
+                  <span className="text-muted-foreground text-xs font-mono">{t.id}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="border-border/60">
         <CardHeader className="flex-row items-center gap-3 space-y-0">
           <div className="p-2 rounded-lg bg-primary/10">
@@ -100,9 +165,16 @@ export default function TeamPage() {
               {members.length} members loaded
             </p>
           </div>
-          <Button variant="outline" className="ml-auto" size="sm" type="button" asChild>
-            <a href="/dashboard/users">Open user management</a>
-          </Button>
+          <div className="ml-auto flex gap-2">
+            {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+              <Button variant="outline" size="sm" type="button" asChild>
+                <a href="/dashboard/teams">Manage teams</a>
+              </Button>
+            )}
+            <Button variant="outline" size="sm" type="button" asChild>
+              <a href="/dashboard/users">User management</a>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -114,7 +186,7 @@ export default function TeamPage() {
           ) : filteredUsers.length === 0 ? (
             <div className="text-center py-14 text-muted-foreground">
               {members.length === 0
-                ? 'No DynamoDB rows for this team — create users via signup or the Users page.'
+                ? 'No users with this primaryTeamId — create users via signup or User management.'
                 : 'No matches for that search.'}
             </div>
           ) : (

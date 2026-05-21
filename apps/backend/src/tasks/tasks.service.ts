@@ -270,7 +270,11 @@ export class TasksService {
     filename: string,
     contentType: string,
   ) {
-    if (!this.s3) throw new Error("S3Service not configured");
+    if (!this.s3) {
+      throw new BadRequestException(
+        "File storage is not configured (S3). Set S3_BUCKET_NAME and AWS credentials.",
+      );
+    }
     const task = await this.repo.getTaskById(taskId);
     if (!task) throw new NotFoundException("Task not found");
     if (!hasTeamAccess(actor, task.teamId)) {
@@ -302,7 +306,11 @@ export class TasksService {
     taskId: string,
     body: { attachmentId?: string; key?: string; eTag?: string; size?: number },
   ) {
-    if (!this.s3) throw new Error("S3Service not configured");
+    if (!this.s3) {
+      throw new BadRequestException(
+        "File storage is not configured (S3). Set S3_BUCKET_NAME and AWS credentials.",
+      );
+    }
     const task = await this.repo.getTaskById(taskId);
     if (!task) throw new NotFoundException("Task not found");
     if (!hasTeamAccess(actor, task.teamId)) {
@@ -396,6 +404,35 @@ export class TasksService {
     );
 
     return updatedTask;
+  }
+
+  async getAttachmentDownloadUrl(
+    actor: UserItem,
+    taskId: string,
+    attachmentId: string,
+  ): Promise<{ url: string; expiresIn: number }> {
+    if (!this.s3) {
+      throw new BadRequestException(
+        "File storage is not configured (S3). Set S3_BUCKET_NAME and AWS credentials.",
+      );
+    }
+    const task = await this.repo.getTaskById(taskId);
+    if (!task) throw new NotFoundException("Task not found");
+    if (!hasTeamAccess(actor, task.teamId)) {
+      throw new ForbiddenException("Access denied");
+    }
+    const att = (task.attachments || []).find(
+      (a) => a.attachmentId === attachmentId,
+    );
+    if (!att?.originalKey) {
+      throw new NotFoundException("Attachment not found");
+    }
+    const expiresIn = 3600;
+    const url = await this.s3.getPresignedDownloadUrl(
+      att.originalKey,
+      expiresIn,
+    );
+    return { url, expiresIn };
   }
 
   async invokeImageResize(functionName: string, payload: any) {

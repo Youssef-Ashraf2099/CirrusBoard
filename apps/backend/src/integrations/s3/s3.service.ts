@@ -2,13 +2,14 @@ import {
   S3Client,
   PutObjectCommand,
   HeadObjectCommand,
+  GetObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { getAwsClientOptions } from "../../config/aws.config";
+import { getS3ClientOptions } from "../../config/s3-client.config";
 import { S3Config } from "../../config/s3.config";
 
 export class S3Service {
-  private client = new S3Client(getAwsClientOptions());
+  private client = new S3Client(getS3ClientOptions());
 
   async getPresignedUploadUrl(
     key: string,
@@ -42,5 +43,13 @@ export class S3Service {
       return `${S3Config.endpoint}/${S3Config.bucketName}/${key}`;
     }
     return `https://${S3Config.bucketName}.s3.${S3Config.region}.amazonaws.com/${key}`;
+  }
+
+  async getPresignedDownloadUrl(key: string, expires = 3600): Promise<string> {
+    const cmd = new GetObjectCommand({
+      Bucket: S3Config.bucketName,
+      Key: key,
+    });
+    return getSignedUrl(this.client, cmd, { expiresIn: expires });
   }
 }

@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Search, SlidersHorizontal } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import type { Task, TaskStatus, Project, User } from '@/lib/types'
 import { api, ApiError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth-context'
@@ -102,10 +102,6 @@ export default function KanbanPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" className="gap-2" type="button">
-              <SlidersHorizontal className="w-4 h-4" />
-              Filters
-            </Button>
             <Button
               className="gap-2"
               type="button"
@@ -155,6 +151,7 @@ export default function KanbanPage() {
         open={modalOpen}
         onOpenChange={setModalOpen}
         onCommentsChanged={() => void reload()}
+        onTaskUpdated={() => void reload()}
       />
 
       <TaskFormModal

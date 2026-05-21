@@ -21,7 +21,6 @@ import {
   CheckSquare,
   Users,
   Settings,
-  Bell,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -30,10 +29,14 @@ import {
   BarChart3,
   Menu,
   Shield,
+  Building2,
+  Bell,
+  Activity,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { ThemeToggle } from '@/components/layout/theme-toggle'
+import { NotificationsMenu } from '@/components/layout/notifications-menu'
 
 interface SidebarProps {
   collapsed?: boolean
@@ -47,6 +50,18 @@ const navItems = [
   { href: '/dashboard/kanban', label: 'Kanban Board', icon: BarChart3 },
   { href: '/dashboard/team', label: 'Team', icon: Users },
   {
+    href: '/dashboard/teams',
+    label: 'Teams',
+    icon: Building2,
+    roles: ['admin', 'manager'] as const,
+  },
+  {
+    href: '/dashboard/activity',
+    label: 'Activity',
+    icon: Activity,
+  },
+  { href: '/dashboard/notifications', label: 'Notifications', icon: Bell },
+  {
     href: '/dashboard/users',
     label: 'User management',
     icon: Shield,
@@ -58,7 +73,6 @@ const navItems = [
 export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const { user, logout } = useAuth()
-  const unreadNotifications = 0
 
   const links = navItems.filter((item) => {
     if ('roles' in item && item.roles) {
@@ -232,7 +246,6 @@ interface TopBarProps {
 
 export function TopBar({ sidebarCollapsed, onMenuClick }: TopBarProps) {
   const { user } = useAuth()
-  const unreadNotifications = 0
   const firstName = user?.name?.split(' ')[0] ?? 'there'
 
   return (
@@ -264,29 +277,7 @@ export function TopBar({ sidebarCollapsed, onMenuClick }: TopBarProps) {
 
         <div className="flex items-center gap-3">
           <ThemeToggle />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="w-5 h-5" />
-                {unreadNotifications > 0 && (
-                  <motion.span
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center"
-                  >
-                    {unreadNotifications}
-                  </motion.span>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-72">
-              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-                You&apos;re all caught up — no new notifications.
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <NotificationsMenu />
 
           <Badge variant="outline" className="hidden sm:flex gap-1 items-center capitalize">
             <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
