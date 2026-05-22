@@ -76,17 +76,43 @@ export function TaskFormModal({
   const [loadingProjectAssignees, setLoadingProjectAssignees] = useState(false);
 
   const isEdit = !!task;
-  const usersInTeam = users.filter((u) => u.teamId === projectTeamId);
+  const selectedProject = projects.find((p) => p.id === projectId);
+  const usersInTeam = users.filter(
+    (u) => u.teamId === (selectedProject?.teamId ?? projectTeamId),
+  );
+  const assigneeOptions =
+    projectAssignees.length > 0 ? projectAssignees : usersInTeam;
+
+  useEffect(() => {
+    if (!open) return;
+
+    if (task) {
+      const nextProjectId = projects.some((p) => p.id === task.projectId)
+        ? task.projectId
+        : (projects[0]?.id ?? "");
+      if (nextProjectId && nextProjectId !== projectId) {
+        setProjectId(nextProjectId);
+      }
+      return;
+    }
+
+    if (!projects.length) return;
+
+    const hasCurrentProject = projects.some((p) => p.id === projectId);
+    if (!projectId || !hasCurrentProject) {
+      setProjectId(projects[0]?.id ?? "");
+    }
+  }, [open, task, projects, projectId]);
 
   useEffect(() => {
     if (!open) return;
 
     let cancelled = false;
 
-    const selectedProject = projects.find((p) => p.id === projectId);
     if (!selectedProject) {
       setProjectAssignees([]);
       setProjectTeamId(teamId);
+      setLoadingProjectAssignees(false);
       return;
     }
 
@@ -113,10 +139,7 @@ export function TaskFormModal({
     return () => {
       cancelled = true;
     };
-  }, [open, projectId, projects, teamId]);
-
-  const assigneeOptions =
-    projectAssignees.length > 0 ? projectAssignees : usersInTeam;
+  }, [open, selectedProject, teamId]);
 
   useEffect(() => {
     if (!open) return;
@@ -333,11 +356,17 @@ export function TaskFormModal({
                   <SelectValue placeholder="Project" />
                 </SelectTrigger>
                 <SelectContent>
-                  {projects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
+                  {projects.length === 0 ? (
+                    <SelectItem value="__none__" disabled>
+                      No projects available
                     </SelectItem>
-                  ))}
+                  ) : (
+                    projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>

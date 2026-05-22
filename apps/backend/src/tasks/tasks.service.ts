@@ -19,6 +19,7 @@ import { SnsService } from "../integrations/sns/sns.service";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { ProjectsRepository } from "../projects/projects.repository";
+import { isTeamMember } from "../common/permissions";
 
 @Injectable()
 export class TasksService {
@@ -55,8 +56,7 @@ export class TasksService {
       throw new NotFoundException("Assignee not found");
     }
     const taskTeam = this.normalizeTeamId(teamId);
-    const userTeam = this.normalizeTeamId(assignee.primaryTeamId ?? "");
-    if (userTeam !== taskTeam) {
+    if (!isTeamMember(assignee, taskTeam)) {
       throw new BadRequestException(
         "Assignee must belong to the selected task team",
       );
@@ -208,11 +208,11 @@ export class TasksService {
       }
       return this.repo.listAllTasks();
     }
-    if (teamId && teamId !== actor.primaryTeamId) {
+    if (teamId && !isTeamMember(actor, teamId)) {
       throw new ForbiddenException("Access denied to team tasks");
     }
     const assigned = await this.repo.queryTasksByAssigneeId(actor.userId);
-    return assigned.filter((t) => t.teamId === actor.primaryTeamId);
+    return assigned.filter((t) => isTeamMember(actor, t.teamId));
   }
 
   async updateStatus(
