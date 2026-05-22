@@ -75,12 +75,7 @@ export class TasksService {
       throw new NotFoundException("Project not found");
     }
     const roster = project.memberUserIds ?? [];
-    if (roster.length === 0) {
-      throw new BadRequestException(
-        "Assign employees to this project before creating tasks",
-      );
-    }
-    if (!roster.includes(assignee.userId)) {
+    if (roster.length > 0 && !roster.includes(assignee.userId)) {
       throw new BadRequestException(
         "Assignee must be assigned to this project",
       );

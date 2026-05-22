@@ -172,11 +172,10 @@ export class UsersRepository {
     indexName = "primaryTeamId-index",
   ): Promise<UserItem[]> {
     const res = await this.client.send(
-      new QueryCommand({
+      new ScanCommand({
         TableName: this.tableName,
-        IndexName: indexName,
-        KeyConditionExpression: "#primaryTeamId = :teamId",
-        ExpressionAttributeNames: { "#primaryTeamId": "primaryTeamId" },
+        FilterExpression:
+          "primaryTeamId = :teamId OR contains(teamIds, :teamId)",
         ExpressionAttributeValues: { ":teamId": teamId },
       }) as any,
     );
