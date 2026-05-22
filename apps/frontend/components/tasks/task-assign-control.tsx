@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Select,
   SelectContent,
@@ -8,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 import type { Task, User } from '@/lib/types'
 import { api, ApiError } from '@/lib/api/client'
@@ -16,19 +15,28 @@ import { toast } from 'sonner'
 
 interface TaskAssignControlProps {
   task: Task
-  users: User[]
   onAssigned: () => void
 }
 
-export function TaskAssignControl({
-  task,
-  users,
-  onAssigned,
-}: TaskAssignControlProps) {
+export function TaskAssignControl({ task, onAssigned }: TaskAssignControlProps) {
   const [assigneeId, setAssigneeId] = useState(task.assigneeId ?? '')
+  const [assignableUsers, setAssignableUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  const teamUsers = users.filter((u) => u.teamId === task.teamId)
+  useEffect(() => {
+    setAssigneeId(task.assigneeId ?? '')
+    setLoading(true)
+    void api
+      .getProject(task.projectId, true)
+      .then((project) => {
+        setAssignableUsers(
+          (project.members ?? []).filter((u) => u.role === 'employee'),
+        )
+      })
+      .catch(() => setAssignableUsers([]))
+      .finally(() => setLoading(false))
+  }, [task.projectId, task.assigneeId])
 
   async function onSelectChange(nextId: string) {
     setAssigneeId(nextId)
@@ -50,20 +58,20 @@ export function TaskAssignControl({
     <Select
       value={assigneeId}
       onValueChange={(v) => void onSelectChange(v)}
-      disabled={saving}
+      disabled={saving || loading}
     >
       <SelectTrigger className="h-9 w-full max-w-[220px]">
-        {saving ? (
+        {saving || loading ? (
           <span className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            Saving…
+            {loading ? 'Loading…' : 'Saving…'}
           </span>
         ) : (
           <SelectValue placeholder="Unassigned" />
         )}
       </SelectTrigger>
       <SelectContent>
-        {teamUsers.map((u) => (
+        {assignableUsers.map((u) => (
           <SelectItem key={u.id} value={u.id}>
             {u.name}
           </SelectItem>

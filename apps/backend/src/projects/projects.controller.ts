@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
@@ -39,10 +40,20 @@ export class ProjectsController {
   }
 
   @Get(":id")
-  @ApiOperation({ summary: "Get a project by ID" })
-  findOne(@User() user: any, @Param("id") id: string) {
+  @ApiOperation({
+    summary: "Get a project by ID; ?expand=members includes assigned users",
+  })
+  findOne(
+    @User() user: any,
+    @Param("id") id: string,
+    @Query("expand") expand?: string,
+  ) {
     if (!user) throw new UnauthorizedException("Authentication required");
-    return this.projectsService.getProject(user as UserItem, id);
+    return this.projectsService.getProject(
+      user as UserItem,
+      id,
+      expand === "members",
+    );
   }
 
   @Patch(":id")

@@ -18,4 +18,6 @@ export class CreateProjectDto {
   startDate?: string;
   @ApiProperty({ required: false })
   endDate?: string;
+  @ApiProperty({ required: false, type: [String] })
+  memberUserIds?: string[];
 }

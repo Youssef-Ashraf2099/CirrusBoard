@@ -33,6 +33,13 @@ import { api, ApiError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
 import { isPrivilegedRole } from '@/lib/roles'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const statusColors = {
   active: 'bg-success/10 text-success border-success/20',
@@ -58,24 +65,39 @@ export default function ProjectsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [formOpen, setFormOpen] = useState(false)
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null)
+  const [viewTeamId, setViewTeamId] = useState(teamId)
+  const [teamOptions, setTeamOptions] = useState<{ id: string; name: string }[]>(
+    [],
+  )
+
+  const scopeTeamId = canManage ? viewTeamId : teamId
 
   const reload = useCallback(async () => {
+    if (!scopeTeamId) return
     setLoading(true)
     try {
       const [p, t, u] = await Promise.all([
-        api.listProjects(teamId),
-        api.loadTasksWithMeta(teamId),
-        api.listUsers(teamId),
+        api.listProjects(scopeTeamId),
+        api.loadTasksWithMeta(canManage ? scopeTeamId : teamId),
+        api.listUsers(scopeTeamId),
       ])
       setProjects(p)
       setTasks(t)
       setMembers(u)
+      if (canManage) {
+        const teams = await api.listTeams().catch(() => [])
+        setTeamOptions(teams.map((t) => ({ id: t.id, name: t.name })))
+      }
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : 'Could not load projects'
       toast.error(msg)
     } finally {
       setLoading(false)
     }
+  }, [scopeTeamId, teamId, canManage, viewTeamId])
+
+  useEffect(() => {
+    setViewTeamId(teamId)
   }, [teamId])
 
   useEffect(() => {
@@ -106,9 +128,27 @@ export default function ProjectsPage() {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Projects</h1>
-            <p className="text-muted-foreground">Backed by Nest `GET /projects/team/:teamId`</p>
+            <p className="text-muted-foreground">
+              {canManage
+                ? 'Projects are scoped by team. Employees only see their team.'
+                : 'Projects for your team'}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            {canManage && teamOptions.length > 0 && (
+              <Select value={viewTeamId} onValueChange={setViewTeamId}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Team" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teamOptions.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -334,7 +374,7 @@ export default function ProjectsPage() {
         <ProjectFormModal
           open={formOpen}
           onOpenChange={setFormOpen}
-          teamId={teamId}
+          defaultTeamId={scopeTeamId || teamId}
           project={projectToEdit}
           onSaved={() => void reload()}
         />

@@ -30,6 +30,8 @@ export interface Project {
   name: string
   description?: string
   teamId: string
+  memberUserIds?: string[]
+  members?: User[]
   status: 'active' | 'completed' | 'archived'
   progress: number
   startDate: string

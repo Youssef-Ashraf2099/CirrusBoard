@@ -9,6 +9,8 @@ export interface ProjectItem {
   endDate?: string;
   createdBy?: string;
   teamId?: string;
+  /** User ids allowed as task assignees for this project */
+  memberUserIds?: string[];
   createdAt?: string;
   updatedAt?: string;
 }

@@ -559,9 +559,10 @@ export const api = {
     return rows.map(mapApiProjectToProject);
   },
 
-  async getProject(id: string): Promise<Project> {
+  async getProject(id: string, expandMembers = false): Promise<Project> {
+    const q = expandMembers ? "?expand=members" : "";
     const raw = await request<ApiProject>(
-      `/api/projects/${encodeURIComponent(id)}`,
+      `/api/projects/${encodeURIComponent(id)}${q}`,
     );
     return mapApiProjectToProject(raw);
   },
@@ -570,6 +571,7 @@ export const api = {
     name: string;
     description?: string;
     teamId?: string;
+    memberUserIds?: string[];
     status?: "ACTIVE" | "ARCHIVED" | "COMPLETED";
     progress?: number;
     startDate?: string;
@@ -581,6 +583,7 @@ export const api = {
         name: input.name,
         description: input.description,
         teamId: input.teamId ?? DEFAULT_TEAM_ID,
+        memberUserIds: input.memberUserIds ?? [],
         status: input.status,
         progress: input.progress,
         startDate: input.startDate,
@@ -599,6 +602,8 @@ export const api = {
       progress?: number;
       startDate?: string;
       endDate?: string;
+      teamId: string;
+      memberUserIds: string[];
     }>,
   ): Promise<Project> {
     const raw = await request<ApiProject>(

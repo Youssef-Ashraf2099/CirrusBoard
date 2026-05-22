@@ -161,8 +161,8 @@ function TeamsManagementInner() {
             Teams
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Create and manage DynamoDB team records. Assign users via User management (
-            <code className="text-xs">primaryTeamId</code>).
+            Create and manage team records. Assign employees via User management (Team
+            dropdown) — they are added to the roster automatically.
           </p>
         </div>
         <div className="flex gap-2">
