@@ -11,6 +11,7 @@ import { SnsModule } from "../integrations/sns/sns.module";
 import { AuditLogsModule } from "../audit-logs/audit-logs.module";
 import { UsersModule } from "../users/users.module";
 import { NotificationsModule } from "../notifications/notifications.module";
+import { ProjectsModule } from "../projects/projects.module";
 
 const dynamoClientProvider = {
   provide: "DYNAMO_CLIENT",
@@ -30,6 +31,7 @@ const tableNameProvider = {
     AuditLogsModule,
     UsersModule,
     NotificationsModule,
+    ProjectsModule,
   ],
   controllers: [TasksController],
   providers: [

@@ -1,11 +1,14 @@
 import {
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
   UnauthorizedException,
+  forwardRef,
 } from "@nestjs/common";
+import { TeamsService } from "../teams/teams.service";
 import { createHmac } from "crypto";
 import { UsersRepository } from "./users.repository";
 import { UserItem } from "./users.model";
@@ -46,7 +49,11 @@ export class UsersService {
     endpoint: process.env.COGNITO_ENDPOINT || undefined,
   });
 
-  constructor(private readonly repo: UsersRepository) {}
+  constructor(
+    private readonly repo: UsersRepository,
+    @Inject(forwardRef(() => TeamsService))
+    private readonly teams: TeamsService,
+  ) {}
 
   async createUser(input: Partial<UserItem>): Promise<PublicUser> {
     try {
@@ -54,6 +61,16 @@ export class UsersService {
       const plainEmail = input.email?.trim().toLowerCase();
 
       const created = await this.repo.createUser(input);
+
+      if (created.primaryTeamId && created.userId) {
+        await this.teams
+          .syncUserPrimaryTeam(created.userId, created.primaryTeamId)
+          .catch((err) => {
+            this.logger.warn(
+              `Team roster sync failed for ${created.userId}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          });
+      }
 
       if (plainEmail && plainPassword) {
         await this.createCognitoUser(plainEmail, plainPassword).catch((err) => {
@@ -120,7 +137,23 @@ export class UsersService {
     userId: string,
     updates: Partial<UserItem>,
   ): Promise<PublicUser> {
+    const existing = await this.repo.getUserById(userId);
+    const previousTeamId = existing?.primaryTeamId;
     const updated = await this.repo.updateUser(userId, updates);
+
+    if (updated.primaryTeamId && updated.userId) {
+      await this.teams
+        .syncUserPrimaryTeam(
+          updated.userId,
+          updated.primaryTeamId,
+          previousTeamId,
+        )
+        .catch((err) => {
+          this.logger.warn(
+            `Team roster sync failed for ${updated.userId}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        });
+    }
 
     // Sync new password to Cognito if it changed
     if (updates.password && updated.email) {

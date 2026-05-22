@@ -18,11 +18,14 @@ import { LambdaService } from "../integrations/lambda/lambda.service";
 import { SnsService } from "../integrations/sns/sns.service";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { ProjectsRepository } from "../projects/projects.repository";
+
 @Injectable()
 export class TasksService {
   constructor(
     private readonly repo: TasksRepository,
     private readonly usersRepo: UsersRepository,
+    private readonly projectsRepo: ProjectsRepository,
     private readonly s3?: S3Service,
     private readonly lambda?: LambdaService,
     private readonly sns?: SnsService,
@@ -56,6 +59,30 @@ export class TasksService {
     if (userTeam !== taskTeam) {
       throw new BadRequestException(
         "Assignee must belong to the selected task team",
+      );
+    }
+    return assignee;
+  }
+
+  private async validateAssigneeForProject(
+    projectId: string,
+    assigneeId: string,
+    teamId: string,
+  ): Promise<UserItem> {
+    const assignee = await this.validateAssigneeForTeam(teamId, assigneeId);
+    const project = await this.projectsRepo.getProjectById(projectId);
+    if (!project) {
+      throw new NotFoundException("Project not found");
+    }
+    const roster = project.memberUserIds ?? [];
+    if (roster.length === 0) {
+      throw new BadRequestException(
+        "Assign employees to this project before creating tasks",
+      );
+    }
+    if (!roster.includes(assignee.userId)) {
+      throw new BadRequestException(
+        "Assignee must be assigned to this project",
       );
     }
     return assignee;
@@ -128,7 +155,14 @@ export class TasksService {
       throw new BadRequestException("teamId is required");
     }
     if (input.assigneeId) {
-      await this.validateAssigneeForTeam(input.teamId, input.assigneeId);
+      if (!input.projectId) {
+        throw new BadRequestException("projectId is required");
+      }
+      await this.validateAssigneeForProject(
+        input.projectId,
+        input.assigneeId,
+        input.teamId,
+      );
     }
     const now = new Date().toISOString();
     const task: Partial<TaskItem> = {
@@ -222,9 +256,10 @@ export class TasksService {
       throw new NotFoundException("Task not found");
     }
 
-    const assignee = await this.validateAssigneeForTeam(
-      task.teamId,
+    const assignee = await this.validateAssigneeForProject(
+      task.projectId,
       assigneeId,
+      task.teamId,
     );
 
     const previousAssignee = task.assigneeId;
@@ -288,7 +323,11 @@ export class TasksService {
       input.assigneeId !== undefined &&
       input.assigneeId !== task.assigneeId
     ) {
-      await this.validateAssigneeForTeam(task.teamId, input.assigneeId);
+      await this.validateAssigneeForProject(
+        task.projectId,
+        input.assigneeId,
+        task.teamId,
+      );
     }
     const updates: Partial<TaskItem> = {
       updatedAt: new Date().toISOString(),

@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { createSharedDynamoDBClient } from "../common/dynamo-client.factory";
 import { TeamsRepository } from "./teams.repository";
@@ -18,7 +18,7 @@ const teamsTableProvider = {
 };
 
 @Module({
-  imports: [UsersModule],
+  imports: [forwardRef(() => UsersModule)],
   controllers: [TeamsController],
   providers: [
     dynamoClientProvider,
@@ -26,5 +26,6 @@ const teamsTableProvider = {
     TeamsRepository,
     TeamsService,
   ],
+  exports: [TeamsService],
 })
 export class TeamsModule {}

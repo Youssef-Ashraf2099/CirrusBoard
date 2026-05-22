@@ -273,7 +273,6 @@ export function TaskDetailModal({
                 {canManage ? (
                   <TaskAssignControl
                     task={view}
-                    users={teamUsers}
                     onAssigned={() => void refreshDetail()}
                   />
                 ) : view.assignee ? (

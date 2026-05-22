@@ -35,6 +35,8 @@ export type ApiProject = {
   startDate?: string
   endDate?: string
   teamId?: string
+  memberUserIds?: string[]
+  members?: ApiUser[]
   createdAt?: string
   updatedAt?: string
 }
@@ -236,6 +238,8 @@ export function mapApiProjectToProject(p: ApiProject): Project {
     name: p.name,
     description: p.description ?? '',
     teamId: p.teamId ?? DEFAULT_TEAM_ID,
+    memberUserIds: p.memberUserIds ?? [],
+    members: (p.members ?? []).map(mapApiUserToUser),
     status,
     progress: p.progress ?? 0,
     startDate: p.startDate ?? p.createdAt ?? new Date().toISOString(),

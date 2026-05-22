@@ -97,29 +97,22 @@ export function TaskFormModal({
   }, [open, teamId])
 
   useEffect(() => {
-    if (!open || !projectTeamId) {
+    if (!open || !projectId) {
       setAssignableUsers([])
       return
     }
     setAssigneesLoading(true)
-    const usersOnProjectTeam = users.filter((u) => u.teamId === projectTeamId)
     void api
-      .getTeam(projectTeamId)
-      .then((team) => {
-        if (team.members.length > 0) {
-          const allowed = new Set(team.members.map((m) => m.id))
-          setAssignableUsers(
-            usersOnProjectTeam.filter((u) => allowed.has(u.id)),
-          )
-        } else {
-          setAssignableUsers(usersOnProjectTeam)
-        }
+      .getProject(projectId, true)
+      .then((project) => {
+        const employees = (project.members ?? []).filter(
+          (u) => u.role === 'employee',
+        )
+        setAssignableUsers(employees)
       })
-      .catch(() => {
-        setAssignableUsers(usersOnProjectTeam)
-      })
+      .catch(() => setAssignableUsers([]))
       .finally(() => setAssigneesLoading(false))
-  }, [open, projectTeamId, users])
+  }, [open, projectId])
 
   useEffect(() => {
     if (!open) return
@@ -193,7 +186,7 @@ export function TaskFormModal({
       return
     }
     if (!assignableUsers.some((u) => u.id === assigneeId)) {
-      toast.error('Assignee must be a member of the project team')
+      toast.error('Assignee must be an employee assigned to this project')
       return
     }
     if (!dueDate) {
@@ -380,7 +373,7 @@ export function TaskFormModal({
                         : assigneesLoading
                           ? 'Loading team members…'
                           : assignableUsers.length === 0
-                            ? 'No members on this team'
+                            ? 'No employees on this project'
                             : 'Select assignee'
                     }
                   />
@@ -397,8 +390,8 @@ export function TaskFormModal({
                 !assigneesLoading &&
                 assignableUsers.length === 0 && (
                   <p className="text-xs text-muted-foreground">
-                    Add users to this team under Team or Users, then assign
-                    tasks.
+                    Assign employees to this project under Projects → edit
+                    project, then create the task.
                   </p>
                 )}
             </div>

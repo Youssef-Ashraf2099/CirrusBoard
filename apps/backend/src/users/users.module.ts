@@ -1,4 +1,5 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
+import { TeamsModule } from "../teams/teams.module";
 import { UsersService } from "./users.service";
 import { UsersController } from "./users.controller";
 import { UsersRepository } from "./users.repository";
@@ -17,6 +18,7 @@ const tableNameProvider = {
 };
 
 @Module({
+  imports: [forwardRef(() => TeamsModule)],
   controllers: [UsersController],
   providers: [
     dynamoClientProvider,

@@ -33,6 +33,7 @@ export class ProjectsRepository {
       ...(project.endDate !== undefined ? { endDate: project.endDate } : {}),
       createdBy: project.createdBy,
       teamId: project.teamId,
+      memberUserIds: project.memberUserIds ?? [],
       createdAt: project.createdAt ?? now,
       updatedAt: now,
     } as ProjectItem;

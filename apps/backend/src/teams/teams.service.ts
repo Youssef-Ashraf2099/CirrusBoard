@@ -105,4 +105,49 @@ export class TeamsService {
     if (!this.canMutateTeam(actor, existing)) throw new ForbiddenException("Access denied");
     await this.repo.delete(id);
   }
+
+  /** Keep team roster in sync when users.primaryTeamId changes in User management. */
+  async syncUserPrimaryTeam(
+    userId: string,
+    teamId: string,
+    previousTeamId?: string,
+  ): Promise<void> {
+    const next = teamId?.trim();
+    if (!next) return;
+    const prev = previousTeamId?.trim();
+    if (prev && prev !== next) {
+      await this.removeMemberFromTeam(prev, userId);
+    }
+    await this.addMemberToTeam(next, userId);
+  }
+
+  private async addMemberToTeam(teamId: string, userId: string): Promise<void> {
+    const team = await this.repo.getById(teamId);
+    if (!team) return;
+    const ids = new Set(team.memberUserIds ?? []);
+    if (ids.has(userId)) return;
+    ids.add(userId);
+    const now = new Date().toISOString();
+    await this.repo.put({
+      ...team,
+      memberUserIds: [...ids],
+      updatedAt: now,
+    });
+  }
+
+  private async removeMemberFromTeam(
+    teamId: string,
+    userId: string,
+  ): Promise<void> {
+    const team = await this.repo.getById(teamId);
+    if (!team) return;
+    const ids = (team.memberUserIds ?? []).filter((id) => id !== userId);
+    if (ids.length === (team.memberUserIds ?? []).length) return;
+    const now = new Date().toISOString();
+    await this.repo.put({
+      ...team,
+      memberUserIds: ids,
+      updatedAt: now,
+    });
+  }
 }
