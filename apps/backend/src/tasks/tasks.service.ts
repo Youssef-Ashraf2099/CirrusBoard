@@ -7,6 +7,8 @@ import {
 import { TasksRepository } from "./tasks.repository";
 import { TaskItem, Attachment } from "./tasks.model";
 import { UserItem } from "../users/users.model";
+import { UsersRepository } from "../users/users.repository";
+import { assertCanReadTask } from "./task-access";
 import { v4 as uuidv4 } from "uuid";
 import { CreateTaskDto } from "./dto/create-task.dto";
 import { UpdateTaskDto } from "./dto/update-task.dto";
@@ -15,20 +17,42 @@ import { S3Service } from "../integrations/s3/s3.service";
 import { LambdaService } from "../integrations/lambda/lambda.service";
 import { SnsService } from "../integrations/sns/sns.service";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
-import {
-  canManageWorkspace,
-  hasTeamAccess,
-} from "../common/auth/cognito-auth.utils";
-
 @Injectable()
 export class TasksService {
   constructor(
     private readonly repo: TasksRepository,
+    private readonly usersRepo: UsersRepository,
     private readonly s3?: S3Service,
     private readonly lambda?: LambdaService,
     private readonly sns?: SnsService,
     private readonly auditLogs?: AuditLogsService,
   ) {}
+
+  private async validateAssigneeForTeam(
+    teamId: string,
+    assigneeId: string,
+  ): Promise<void> {
+    if (!assigneeId) {
+      throw new BadRequestException("Assignee is required");
+    }
+    const assignee = await this.usersRepo.getUserById(assigneeId);
+    if (!assignee) {
+      throw new NotFoundException("Assignee not found");
+    }
+    if (assignee.primaryTeamId !== teamId) {
+      throw new BadRequestException(
+        "Assignee must belong to the selected task team",
+      );
+    }
+  }
+
+  /** Load task and enforce read access (used by comments and other modules). */
+  async assertTaskAccess(actor: UserItem, taskId: string): Promise<TaskItem> {
+    const task = await this.repo.getTaskById(taskId);
+    if (!task) throw new NotFoundException("Task not found");
+    assertCanReadTask(actor, task);
+    return task;
+  }
 
   private serializeAuditValue(value: unknown) {
     if (value === undefined || value === null) return undefined;
@@ -85,6 +109,12 @@ export class TasksService {
     if (!isPrivileged(actor.role)) {
       throw new ForbiddenException("Only managers may create tasks");
     }
+    if (!input.teamId) {
+      throw new BadRequestException("teamId is required");
+    }
+    if (input.assigneeId) {
+      await this.validateAssigneeForTeam(input.teamId, input.assigneeId);
+    }
     const now = new Date().toISOString();
     const task: Partial<TaskItem> = {
       taskId: uuidv4(),
@@ -119,12 +149,21 @@ export class TasksService {
   }
 
   async getTask(actor: UserItem, taskId: string): Promise<TaskItem> {
-    const task = await this.repo.getTaskById(taskId);
-    if (!task) throw new NotFoundException("Task not found");
-    if (!isPrivileged(actor.role) && actor.primaryTeamId !== task.teamId) {
-      throw new ForbiddenException("Access denied to this task");
+    return this.assertTaskAccess(actor, taskId);
+  }
+
+  async listTasks(actor: UserItem, teamId?: string): Promise<TaskItem[]> {
+    if (isPrivileged(actor.role)) {
+      if (teamId) {
+        return this.repo.queryTasksByTeamId(teamId);
+      }
+      return this.repo.listAllTasks();
     }
-    return task;
+    if (teamId && teamId !== actor.primaryTeamId) {
+      throw new ForbiddenException("Access denied to team tasks");
+    }
+    const assigned = await this.repo.queryTasksByAssigneeId(actor.userId);
+    return assigned.filter((t) => t.teamId === actor.primaryTeamId);
   }
 
   async updateStatus(
@@ -134,10 +173,8 @@ export class TasksService {
   ): Promise<TaskItem> {
     const task = await this.repo.getTaskById(taskId);
     if (!task) throw new NotFoundException("Task not found");
-    // Employees can only update tasks assigned to them
     if (actor.role === "EMPLOYEE") {
-      if (actor.userId !== task.assigneeId)
-        throw new ForbiddenException("Not assigned to you");
+      assertCanReadTask(actor, task);
     }
     const updates: Partial<TaskItem> = {
       status,
@@ -171,6 +208,8 @@ export class TasksService {
     if (!task) {
       throw new NotFoundException("Task not found");
     }
+
+    await this.validateAssigneeForTeam(task.teamId, assigneeId);
 
     const previousAssignee = task.assigneeId;
     const updated = await this.repo.updateTask(taskId, {
@@ -210,11 +249,13 @@ export class TasksService {
   ): Promise<TaskItem> {
     const task = await this.repo.getTaskById(taskId);
     if (!task) throw new NotFoundException("Task not found");
-    if (actor.role === "EMPLOYEE" && actor.userId !== task.assigneeId) {
-      throw new ForbiddenException("Not assigned to you");
+    if (!isPrivileged(actor.role)) {
+      throw new ForbiddenException(
+        "Only managers may update task fields; use status endpoint",
+      );
     }
-    if (!isPrivileged(actor.role) && actor.primaryTeamId !== task.teamId) {
-      throw new ForbiddenException("Access denied");
+    if (input.assigneeId !== undefined) {
+      await this.validateAssigneeForTeam(task.teamId, input.assigneeId);
     }
     const updates: Partial<TaskItem> = {
       updatedAt: new Date().toISOString(),
@@ -241,11 +282,11 @@ export class TasksService {
   }
 
   async deleteTask(actor: UserItem, taskId: string): Promise<void> {
+    if (!isPrivileged(actor.role)) {
+      throw new ForbiddenException("Only managers may delete tasks");
+    }
     const task = await this.repo.getTaskById(taskId);
     if (!task) throw new NotFoundException("Task not found");
-    if (!isPrivileged(actor.role) && actor.primaryTeamId !== task.teamId) {
-      throw new ForbiddenException("Access denied");
-    }
     await this.recordAuditLog(
       taskId,
       actor.userId,
@@ -260,10 +301,7 @@ export class TasksService {
     actor: UserItem,
     teamId: string,
   ): Promise<TaskItem[]> {
-    if (!isPrivileged(actor.role) && actor.primaryTeamId !== teamId) {
-      throw new ForbiddenException("Access denied to team tasks");
-    }
-    return this.repo.queryTasksByTeamId(teamId);
+    return this.listTasks(actor, teamId);
   }
 
   async getUploadUrlForTask(
@@ -279,9 +317,7 @@ export class TasksService {
     }
     const task = await this.repo.getTaskById(taskId);
     if (!task) throw new NotFoundException("Task not found");
-    if (!hasTeamAccess(actor, task.teamId)) {
-      throw new ForbiddenException("Access denied to upload for this task");
-    }
+    assertCanReadTask(actor, task);
     const key = `tasks/${taskId}/attachments/${uuidv4()}_${filename}`;
     const uploadUrl = await this.s3.getPresignedUploadUrl(key, contentType);
     const objectUrl = this.s3.getObjectUrl(key);
@@ -315,9 +351,7 @@ export class TasksService {
     }
     const task = await this.repo.getTaskById(taskId);
     if (!task) throw new NotFoundException("Task not found");
-    if (!hasTeamAccess(actor, task.teamId)) {
-      throw new ForbiddenException("Access denied to upload for this task");
-    }
+    assertCanReadTask(actor, task);
 
     // find attachment by id or key
     let att = null as any;
@@ -419,9 +453,7 @@ export class TasksService {
     }
     const task = await this.repo.getTaskById(taskId);
     if (!task) throw new NotFoundException("Task not found");
-    if (!hasTeamAccess(actor, task.teamId)) {
-      throw new ForbiddenException("Access denied");
-    }
+    assertCanReadTask(actor, task);
     const att = (task.attachments || []).find(
       (a) => a.attachmentId === attachmentId,
     );

@@ -32,6 +32,7 @@ import type { Project, Task, User } from '@/lib/types'
 import { api, ApiError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
+import { isPrivilegedRole } from '@/lib/roles'
 
 const statusColors = {
   active: 'bg-success/10 text-success border-success/20',
@@ -47,7 +48,8 @@ function progressForProject(projectId: string, tasks: Task[]) {
 }
 
 export default function ProjectsPage() {
-  const { teamId } = useAuth()
+  const { teamId, user } = useAuth()
+  const canManage = isPrivilegedRole(user?.role)
   const [projects, setProjects] = useState<Project[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [members, setMembers] = useState<User[]>([])
@@ -132,16 +134,18 @@ export default function ProjectsPage() {
                 <List className="w-4 h-4" />
               </Button>
             </div>
-            <Button
-              className="gap-2"
-              onClick={() => {
-                setProjectToEdit(null)
-                setFormOpen(true)
-              }}
-            >
-              <Plus className="w-4 h-4" />
-              New Project
-            </Button>
+            {canManage && (
+              <Button
+                className="gap-2"
+                onClick={() => {
+                  setProjectToEdit(null)
+                  setFormOpen(true)
+                }}
+              >
+                <Plus className="w-4 h-4" />
+                New Project
+              </Button>
+            )}
           </div>
         </div>
 
@@ -165,16 +169,18 @@ export default function ProjectsPage() {
             <p className="text-muted-foreground mb-6">
               Bootstrap your workspace by creating a project for team {teamId}.
             </p>
-            <Button
-              className="gap-2"
-              onClick={() => {
-                setProjectToEdit(null)
-                setFormOpen(true)
-              }}
-            >
-              <Plus className="w-4 h-4" />
-              Create Project
-            </Button>
+            {canManage && (
+              <Button
+                className="gap-2"
+                onClick={() => {
+                  setProjectToEdit(null)
+                  setFormOpen(true)
+                }}
+              >
+                <Plus className="w-4 h-4" />
+                Create Project
+              </Button>
+            )}
           </div>
         ) : (
           <div
@@ -226,37 +232,39 @@ export default function ProjectsPage() {
                           >
                             {project.status}
                           </Badge>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setProjectToEdit(project)
-                                  setFormOpen(true)
-                                }}
-                              >
-                                Edit Project
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-destructive"
-                                onClick={async () => {
-                                  try {
-                                    await api.deleteProject(project.id)
-                                    toast.success('Project deleted')
-                                    void reload()
-                                  } catch (e) {
-                                    toast.error(e instanceof ApiError ? e.message : 'Failed')
-                                  }
-                                }}
-                              >
-                                Delete project
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {canManage && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setProjectToEdit(project)
+                                    setFormOpen(true)
+                                  }}
+                                >
+                                  Edit Project
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={async () => {
+                                    try {
+                                      await api.deleteProject(project.id)
+                                      toast.success('Project deleted')
+                                      void reload()
+                                    } catch (e) {
+                                      toast.error(e instanceof ApiError ? e.message : 'Failed')
+                                    }
+                                  }}
+                                >
+                                  Delete project
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </div>
                       </div>
 
@@ -322,13 +330,15 @@ export default function ProjectsPage() {
         )}
       </motion.div>
 
-      <ProjectFormModal
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        teamId={teamId}
-        project={projectToEdit}
-        onSaved={() => void reload()}
-      />
+      {canManage && (
+        <ProjectFormModal
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          teamId={teamId}
+          project={projectToEdit}
+          onSaved={() => void reload()}
+        />
+      )}
     </>
   )
 }

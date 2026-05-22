@@ -12,6 +12,18 @@ import type { ActivityItem, DashboardStats, Project, Task } from '@/lib/types'
 import { api, ApiError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
+import { isPrivilegedRole } from '@/lib/roles'
+import {
+  ALL_TEAMS_VALUE,
+  resolveTaskListTeamId,
+} from '@/lib/task-list-scope'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   buildProjectProgressData,
   buildStatusDistributionData,
@@ -41,21 +53,31 @@ function computeStats(tasks: Task[], projects: Project[], members: number): Dash
 }
 
 export default function DashboardPage() {
-  const { teamId } = useAuth()
+  const { teamId, user } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const [memberCount, setMemberCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [viewTeamId, setViewTeamId] = useState(ALL_TEAMS_VALUE)
+  const [teamOptions, setTeamOptions] = useState<{ id: string; name: string }[]>([])
+  const canViewAllTeams = isPrivilegedRole(user?.role)
+  const canManage = canViewAllTeams
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
+      const scopeTeam = resolveTaskListTeamId(
+        canViewAllTeams,
+        viewTeamId,
+        teamId,
+      )
+      const activityTeam = scopeTeam ?? teamId
       const [p, t, u, a] = await Promise.all([
-        api.listProjects(teamId),
-        api.loadTasksWithMeta(teamId),
-        api.listUsers(teamId),
-        api.listActivity(teamId, 10).catch((err) => {
+        scopeTeam ? api.listProjects(scopeTeam) : Promise.resolve([]),
+        api.loadTasksWithMeta(scopeTeam),
+        scopeTeam ? api.listUsers(scopeTeam) : api.listUsers(),
+        api.listActivity(activityTeam, 10).catch((err) => {
           console.error(
             '[CirrusBoard:Activity] DashboardPage.load activity feed failed (non-fatal)',
             err,
@@ -67,12 +89,21 @@ export default function DashboardPage() {
       setTasks(t)
       setMemberCount(u.length)
       setActivity(a)
+      if (canViewAllTeams) {
+        const teams = await api.listTeams().catch(() => [])
+        setTeamOptions(teams.map((tm) => ({ id: tm.id, name: tm.name })))
+      }
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : 'Could not load dashboard')
     } finally {
       setLoading(false)
     }
-  }, [teamId])
+  }, [teamId, viewTeamId, canViewAllTeams])
+
+  useEffect(() => {
+    if (!canViewAllTeams) setViewTeamId(teamId)
+    else setViewTeamId(ALL_TEAMS_VALUE)
+  }, [teamId, canViewAllTeams])
 
   useEffect(() => {
     void load()
@@ -94,16 +125,38 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
           <p className="text-muted-foreground">
-            Live KPIs derived from Tasks &amp; Projects for team {teamId}
+            Live KPIs from Tasks &amp; Projects
+            {canViewAllTeams
+              ? viewTeamId === ALL_TEAMS_VALUE
+                ? ' (all teams)'
+                : ` (team ${viewTeamId})`
+              : ` (team ${teamId})`}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button className="gap-2" asChild>
-            <Link href="/dashboard/tasks">
-              <Plus className="w-4 h-4" />
-              New Task
-            </Link>
-          </Button>
+          {canViewAllTeams && (
+            <Select value={viewTeamId} onValueChange={setViewTeamId}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Team" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_TEAMS_VALUE}>All Teams</SelectItem>
+                {teamOptions.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {canManage && (
+            <Button className="gap-2" asChild>
+              <Link href="/dashboard/tasks">
+                <Plus className="w-4 h-4" />
+                New Task
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 

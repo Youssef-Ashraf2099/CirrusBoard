@@ -177,9 +177,7 @@ export function TaskDetailModal({
     if (!newComment.trim() || !currentUser) return
     setSending(true)
     try {
-      const created = await api.addComment(task.id, newComment.trim(), {
-        authorId: currentUser.id,
-      })
+      const created = await api.addComment(task.id, newComment.trim())
       setComments((c) => [...c, created])
       setNewComment('')
       toast.success('Comment added')

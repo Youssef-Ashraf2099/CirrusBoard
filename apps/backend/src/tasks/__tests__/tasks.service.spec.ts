@@ -1,12 +1,13 @@
 import { TasksService } from "../tasks.service";
 import { TasksRepository } from "../tasks.repository";
-import { TaskItem } from "../tasks.model";
 import { UserItem } from "../../users/users.model";
 import { SnsService } from "../../integrations/sns/sns.service";
+import { UsersRepository } from "../../users/users.repository";
 
 describe("TasksService", () => {
   let service: TasksService;
   let repo: Partial<TasksRepository>;
+  let usersRepo: Partial<UsersRepository>;
   let sns: Partial<SnsService>;
 
   beforeEach(() => {
@@ -16,12 +17,21 @@ describe("TasksService", () => {
       updateTask: jest.fn(),
       deleteTask: jest.fn(),
       queryTasksByTeamId: jest.fn(),
+      queryTasksByAssigneeId: jest.fn(),
+      listAllTasks: jest.fn(),
+    };
+    usersRepo = {
+      getUserById: jest.fn().mockResolvedValue({
+        userId: "sara",
+        primaryTeamId: "team-a",
+      }),
     };
     sns = {
       publishTaskAssigned: jest.fn(),
     } as any;
     service = new TasksService(
       repo as TasksRepository,
+      usersRepo as UsersRepository,
       undefined,
       undefined,
       sns as any,
@@ -89,12 +99,31 @@ describe("TasksService", () => {
     ).rejects.toBeTruthy();
   });
 
+  it("lists only assigned tasks for employee", async () => {
+    const actor: UserItem = {
+      userId: "sara",
+      role: "EMPLOYEE",
+      primaryTeamId: "team-a",
+    } as any;
+    (repo.queryTasksByAssigneeId as jest.Mock).mockResolvedValue([
+      { taskId: "a", assigneeId: "sara", teamId: "team-a" },
+      { taskId: "b", assigneeId: "sara", teamId: "team-b" },
+    ]);
+    const tasks = await service.listTasks(actor);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].taskId).toBe("a");
+  });
+
   it("publishes task assignment event", async () => {
     const actor: UserItem = { userId: "ali", role: "MANAGER" } as any;
     (repo.getTaskById as jest.Mock).mockResolvedValue({
       taskId: "1",
       teamId: "team-a",
     } as any);
+    (usersRepo.getUserById as jest.Mock).mockResolvedValue({
+      userId: "u2",
+      primaryTeamId: "team-a",
+    });
     (repo.updateTask as jest.Mock).mockResolvedValue({
       taskId: "1",
       assigneeId: "u2",

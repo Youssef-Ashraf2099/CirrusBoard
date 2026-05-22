@@ -614,8 +614,18 @@ export const api = {
     });
   },
 
+  /** List tasks: employees get assigned only; managers get all or optional team filter. */
+  async listTasks(teamId?: string): Promise<ApiTask[]> {
+    const path =
+      teamId != null && teamId !== ""
+        ? `/api/tasks?teamId=${encodeURIComponent(teamId)}`
+        : "/api/tasks";
+    return request<ApiTask[]>(path);
+  },
+
+  /** @deprecated Use listTasks(teamId) */
   async listTasksForTeam(teamId: string): Promise<ApiTask[]> {
-    return request<ApiTask[]>(`/api/tasks/team/${encodeURIComponent(teamId)}`);
+    return this.listTasks(teamId);
   },
 
   async getTask(id: string): Promise<ApiTask> {
@@ -824,16 +834,11 @@ export const api = {
     return raw.map((c) => mapApiCommentToComment(c, map));
   },
 
-  async addComment(
-    taskId: string,
-    content: string,
-    options?: { authorId?: string },
-  ): Promise<Comment> {
-    const body: { taskId: string; content: string; authorId?: string } = {
+  async addComment(taskId: string, content: string): Promise<Comment> {
+    const body: { taskId: string; content: string } = {
       taskId,
       content,
     };
-    if (options?.authorId) body.authorId = options.authorId;
     const raw = await request<ApiComment>("/api/comments", {
       method: "POST",
       json: body,
@@ -864,8 +869,10 @@ export const api = {
     );
   },
 
-  async hydrateTasks(tasks: ApiTask[], teamId: string): Promise<Task[]> {
-    const users = await this.listUsers(teamId).catch(() => []);
+  async hydrateTasks(tasks: ApiTask[], teamId?: string): Promise<Task[]> {
+    const users = teamId
+      ? await this.listUsers(teamId).catch(() => [])
+      : await this.listUsers().catch(() => []);
     const userMap = buildUserMap(users);
     const counts = await fetchCommentCountsForTasks(tasks.map((t) => t.taskId));
     return tasks.map((t) =>
@@ -873,8 +880,8 @@ export const api = {
     );
   },
 
-  async loadTasksWithMeta(teamId: string): Promise<Task[]> {
-    const raw = await this.listTasksForTeam(teamId);
+  async loadTasksWithMeta(teamId?: string): Promise<Task[]> {
+    const raw = await this.listTasks(teamId);
     return this.hydrateTasks(raw, teamId);
   },
 };

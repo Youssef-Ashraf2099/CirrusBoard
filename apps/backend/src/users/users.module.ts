@@ -24,6 +24,6 @@ const tableNameProvider = {
     UsersRepository,
     UsersService,
   ],
-  exports: [UsersService],
+  exports: [UsersService, UsersRepository],
 })
 export class UsersModule {}
