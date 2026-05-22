@@ -114,6 +114,28 @@ describe("TasksService", () => {
     expect(tasks[0].taskId).toBe("a");
   });
 
+  it("allows manager to update task fields", async () => {
+    const actor: UserItem = { userId: "ali", role: "MANAGER" } as any;
+    (repo.getTaskById as jest.Mock).mockResolvedValue({
+      taskId: "1",
+      teamId: "team-a",
+      assigneeId: "sara",
+      status: "TODO",
+      deadline: "2026-05-20",
+    });
+    (repo.updateTask as jest.Mock).mockResolvedValue({
+      taskId: "1",
+      title: "Updated",
+      status: "IN_PROGRESS",
+    });
+    const updated = await service.updateTask(actor, "1", {
+      title: "Updated",
+      status: "IN_PROGRESS",
+    } as any);
+    expect(repo.updateTask).toHaveBeenCalled();
+    expect(updated.title).toBe("Updated");
+  });
+
   it("publishes task assignment event", async () => {
     const actor: UserItem = { userId: "ali", role: "MANAGER" } as any;
     (repo.getTaskById as jest.Mock).mockResolvedValue({

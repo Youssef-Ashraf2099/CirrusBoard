@@ -82,8 +82,11 @@ export class TasksRepository {
       setParts.push(`${nameKey} = ${valKey}`);
     }
 
-    // ensure statusDeadline is updated when status/deadline change
-    if (updates.status || updates.deadline) {
+    // Recompute statusDeadline when status/deadline change (skip if service already set it)
+    if (
+      updates.statusDeadline === undefined &&
+      (updates.status !== undefined || updates.deadline !== undefined)
+    ) {
       const status = updates.status ?? "TODO";
       const deadline =
         updates.deadline ?? new Date().toISOString().split("T")[0];
@@ -98,6 +101,10 @@ export class TasksRepository {
     const UpdateExpression = setParts.length
       ? `SET ${setParts.join(", ")}`
       : undefined;
+
+    if (!UpdateExpression) {
+      throw new Error("No task fields to update");
+    }
 
     const pk = `TASK#${taskId}`;
 

@@ -28,6 +28,16 @@ export class TasksService {
     private readonly auditLogs?: AuditLogsService,
   ) {}
 
+  private normalizeTeamId(teamId: string): string {
+    return teamId.replace(/^TEAM#/, "");
+  }
+
+  private async resolveUser(userId: string): Promise<UserItem | null> {
+    const direct = await this.usersRepo.getUserById(userId);
+    if (direct) return direct;
+    return this.usersRepo.getUserByCognitoSub(userId);
+  }
+
   private async validateAssigneeForTeam(
     teamId: string,
     assigneeId: string,
@@ -35,11 +45,13 @@ export class TasksService {
     if (!assigneeId) {
       throw new BadRequestException("Assignee is required");
     }
-    const assignee = await this.usersRepo.getUserById(assigneeId);
+    const assignee = await this.resolveUser(assigneeId);
     if (!assignee) {
       throw new NotFoundException("Assignee not found");
     }
-    if (assignee.primaryTeamId !== teamId) {
+    const taskTeam = this.normalizeTeamId(teamId);
+    const userTeam = this.normalizeTeamId(assignee.primaryTeamId ?? "");
+    if (userTeam !== taskTeam) {
       throw new BadRequestException(
         "Assignee must belong to the selected task team",
       );
@@ -254,7 +266,10 @@ export class TasksService {
         "Only managers may update task fields; use status endpoint",
       );
     }
-    if (input.assigneeId !== undefined) {
+    if (
+      input.assigneeId !== undefined &&
+      input.assigneeId !== task.assigneeId
+    ) {
       await this.validateAssigneeForTeam(task.teamId, input.assigneeId);
     }
     const updates: Partial<TaskItem> = {
