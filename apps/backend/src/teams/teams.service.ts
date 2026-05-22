@@ -1,7 +1,9 @@
 import {
+  Inject,
   ForbiddenException,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from "@nestjs/common";
 import type { TeamItem } from "./teams.model";
 import { TeamsRepository } from "./teams.repository";
@@ -18,6 +20,7 @@ export type TeamWithMembers = TeamItem & { members?: PublicUser[] };
 export class TeamsService {
   constructor(
     private readonly repo: TeamsRepository,
+    @Inject(forwardRef(() => UsersService))
     private readonly users: UsersService,
   ) {}
 
@@ -33,7 +36,10 @@ export class TeamsService {
     return team.managerId === actor.userId;
   }
 
-  async create(actor: UserItem, input: CreateTeamDto): Promise<TeamWithMembers> {
+  async create(
+    actor: UserItem,
+    input: CreateTeamDto,
+  ): Promise<TeamWithMembers> {
     if (!isPrivileged(actor.role)) {
       throw new ForbiddenException("Only managers/admins may create teams");
     }
@@ -55,10 +61,15 @@ export class TeamsService {
     }));
   }
 
-  async findOne(actor: UserItem, id: string, expand?: boolean): Promise<TeamWithMembers> {
+  async findOne(
+    actor: UserItem,
+    id: string,
+    expand?: boolean,
+  ): Promise<TeamWithMembers> {
     const team = await this.repo.getById(id);
     if (!team) throw new NotFoundException("Team not found");
-    if (!this.canSeeTeam(actor, team)) throw new ForbiddenException("Access denied");
+    if (!this.canSeeTeam(actor, team))
+      throw new ForbiddenException("Access denied");
     return this.expandMembers(actor, team, !!expand);
   }
 
@@ -82,10 +93,15 @@ export class TeamsService {
     return { ...team, memberUserIds: ids, members };
   }
 
-  async update(actor: UserItem, id: string, input: UpdateTeamDto): Promise<TeamWithMembers> {
+  async update(
+    actor: UserItem,
+    id: string,
+    input: UpdateTeamDto,
+  ): Promise<TeamWithMembers> {
     const existing = await this.repo.getById(id);
     if (!existing) throw new NotFoundException("Team not found");
-    if (!this.canMutateTeam(actor, existing)) throw new ForbiddenException("Access denied");
+    if (!this.canMutateTeam(actor, existing))
+      throw new ForbiddenException("Access denied");
     const now = new Date().toISOString();
     const next: TeamItem = {
       ...existing,
@@ -102,7 +118,8 @@ export class TeamsService {
   async remove(actor: UserItem, id: string): Promise<void> {
     const existing = await this.repo.getById(id);
     if (!existing) throw new NotFoundException("Team not found");
-    if (!this.canMutateTeam(actor, existing)) throw new ForbiddenException("Access denied");
+    if (!this.canMutateTeam(actor, existing))
+      throw new ForbiddenException("Access denied");
     await this.repo.delete(id);
   }
 
