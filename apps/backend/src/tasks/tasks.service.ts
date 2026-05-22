@@ -17,6 +17,7 @@ import { S3Service } from "../integrations/s3/s3.service";
 import { LambdaService } from "../integrations/lambda/lambda.service";
 import { SnsService } from "../integrations/sns/sns.service";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
+import { NotificationsService } from "../notifications/notifications.service";
 @Injectable()
 export class TasksService {
   constructor(
@@ -25,6 +26,7 @@ export class TasksService {
     private readonly s3?: S3Service,
     private readonly lambda?: LambdaService,
     private readonly sns?: SnsService,
+    private readonly notifications?: NotificationsService,
     private readonly auditLogs?: AuditLogsService,
   ) {}
 
@@ -41,7 +43,7 @@ export class TasksService {
   private async validateAssigneeForTeam(
     teamId: string,
     assigneeId: string,
-  ): Promise<void> {
+  ): Promise<UserItem> {
     if (!assigneeId) {
       throw new BadRequestException("Assignee is required");
     }
@@ -56,6 +58,7 @@ export class TasksService {
         "Assignee must belong to the selected task team",
       );
     }
+    return assignee;
   }
 
   /** Load task and enforce read access (used by comments and other modules). */
@@ -90,7 +93,7 @@ export class TasksService {
       action,
       actorId,
       teamId,
-      target: meta?.target ?? 'task',
+      target: meta?.target ?? "task",
       targetId: meta?.targetId ?? taskId,
       oldValue: this.serializeAuditValue(oldValue),
       newValue: this.serializeAuditValue(newValue),
@@ -210,9 +213,7 @@ export class TasksService {
     assigneeId: string,
   ): Promise<TaskItem> {
     if (!isPrivileged(actor.role)) {
-      throw new ForbiddenException(
-        "Only managers can assign tasks",
-      );
+      throw new ForbiddenException("Only managers can assign tasks");
     }
 
     const task = await this.repo.getTaskById(taskId);
@@ -221,7 +222,10 @@ export class TasksService {
       throw new NotFoundException("Task not found");
     }
 
-    await this.validateAssigneeForTeam(task.teamId, assigneeId);
+    const assignee = await this.validateAssigneeForTeam(
+      task.teamId,
+      assigneeId,
+    );
 
     const previousAssignee = task.assigneeId;
     const updated = await this.repo.updateTask(taskId, {
@@ -251,6 +255,20 @@ export class TasksService {
       }
     }
 
+    if (this.notifications) {
+      try {
+        await this.notifications.create(actor, {
+          userId: assignee.userId,
+          type: "TASK_ASSIGNED",
+          title: "Task assigned",
+          message: `You were assigned to ${task.title}`,
+          link: `/dashboard/tasks/${taskId}`,
+        });
+      } catch (e) {
+        // ignore in-app notification failures for now
+      }
+    }
+
     return updated;
   }
 
@@ -276,7 +294,8 @@ export class TasksService {
       updatedAt: new Date().toISOString(),
     };
     if (input.title !== undefined) updates.title = input.title;
-    if (input.description !== undefined) updates.description = input.description;
+    if (input.description !== undefined)
+      updates.description = input.description;
     if (input.priority !== undefined)
       updates.priority = input.priority as TaskItem["priority"];
     if (input.deadline !== undefined) updates.deadline = input.deadline;
@@ -284,10 +303,7 @@ export class TasksService {
     if (input.status !== undefined)
       updates.status = input.status as TaskItem["status"];
     if (input.tags !== undefined) updates.tags = input.tags;
-    if (
-      input.status !== undefined ||
-      input.deadline !== undefined
-    ) {
+    if (input.status !== undefined || input.deadline !== undefined) {
       const mergedStatus =
         (input.status as TaskItem["status"] | undefined) ?? task.status;
       const mergedDeadline = input.deadline ?? task.deadline;
@@ -312,10 +328,7 @@ export class TasksService {
     await this.repo.deleteTask(taskId);
   }
 
-  async listTasksForTeam(
-    actor: UserItem,
-    teamId: string,
-  ): Promise<TaskItem[]> {
+  async listTasksForTeam(actor: UserItem, teamId: string): Promise<TaskItem[]> {
     return this.listTasks(actor, teamId);
   }
 
@@ -450,7 +463,7 @@ export class TasksService {
       task.teamId,
       undefined,
       { attachmentId: att.attachmentId, key },
-      { target: 'attachment', targetId: att.attachmentId },
+      { target: "attachment", targetId: att.attachmentId },
     );
 
     return updatedTask;

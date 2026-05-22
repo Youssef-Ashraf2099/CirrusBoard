@@ -23,7 +23,12 @@ describe("TasksService presigned + lambda", () => {
     lambda = {
       invoke: jest.fn(),
     } as any;
-    service = new TasksService(repo as any, s3 as any, lambda as any);
+    service = new TasksService(
+      repo as any,
+      undefined as any,
+      s3 as any,
+      lambda as any,
+    );
   });
 
   it("returns presigned url for authorized user", async () => {

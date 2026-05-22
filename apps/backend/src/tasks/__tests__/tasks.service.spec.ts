@@ -3,12 +3,14 @@ import { TasksRepository } from "../tasks.repository";
 import { UserItem } from "../../users/users.model";
 import { SnsService } from "../../integrations/sns/sns.service";
 import { UsersRepository } from "../../users/users.repository";
+import { NotificationsService } from "../../notifications/notifications.service";
 
 describe("TasksService", () => {
   let service: TasksService;
   let repo: Partial<TasksRepository>;
   let usersRepo: Partial<UsersRepository>;
   let sns: Partial<SnsService>;
+  let notifications: Partial<NotificationsService>;
 
   beforeEach(() => {
     repo = {
@@ -29,12 +31,16 @@ describe("TasksService", () => {
     sns = {
       publishTaskAssigned: jest.fn(),
     } as any;
+    notifications = {
+      create: jest.fn(),
+    } as any;
     service = new TasksService(
       repo as TasksRepository,
       usersRepo as UsersRepository,
       undefined,
       undefined,
       sns as any,
+      notifications as any,
     );
   });
 
@@ -159,5 +165,13 @@ describe("TasksService", () => {
       assigneeId: "u2",
       assignedBy: "ali",
     });
+    expect(notifications.create).toHaveBeenCalledWith(
+      actor,
+      expect.objectContaining({
+        userId: "u2",
+        type: "TASK_ASSIGNED",
+        title: "Task assigned",
+      }),
+    );
   });
 });

@@ -10,11 +10,11 @@ import { LambdaModule } from "../integrations/lambda/lambda.module";
 import { SnsModule } from "../integrations/sns/sns.module";
 import { AuditLogsModule } from "../audit-logs/audit-logs.module";
 import { UsersModule } from "../users/users.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 
 const dynamoClientProvider = {
   provide: "DYNAMO_CLIENT",
-  useFactory: () =>
-    DynamoDBDocumentClient.from(createSharedDynamoDBClient()),
+  useFactory: () => DynamoDBDocumentClient.from(createSharedDynamoDBClient()),
 };
 
 const tableNameProvider = {
@@ -23,7 +23,14 @@ const tableNameProvider = {
 };
 
 @Module({
-  imports: [S3Module, LambdaModule, SnsModule, AuditLogsModule, UsersModule],
+  imports: [
+    S3Module,
+    LambdaModule,
+    SnsModule,
+    AuditLogsModule,
+    UsersModule,
+    NotificationsModule,
+  ],
   controllers: [TasksController],
   providers: [
     dynamoClientProvider,
