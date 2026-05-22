@@ -67,13 +67,21 @@ export function TaskFormModal({
   const [submitting, setSubmitting] = useState(false)
   const [teamProjects, setTeamProjects] = useState<Project[]>([])
   const [projectsLoading, setProjectsLoading] = useState(false)
+  const [assignableUsers, setAssignableUsers] = useState<User[]>([])
+  const [assigneesLoading, setAssigneesLoading] = useState(false)
 
   const isEdit = !!task
-  const usersInTeam = users.filter((u) => u.teamId === teamId)
   const availableProjects =
     teamProjects.length > 0
       ? teamProjects
       : projects.filter((p) => p.teamId === teamId)
+  const selectedProject = availableProjects.find((p) => p.id === projectId)
+  const projectTeamId =
+    selectedProject?.teamId ??
+    (isEdit && task
+      ? (availableProjects.find((p) => p.id === task.projectId)?.teamId ??
+        task.teamId)
+      : teamId)
 
   useEffect(() => {
     if (!open || !teamId) {
@@ -89,6 +97,31 @@ export function TaskFormModal({
   }, [open, teamId])
 
   useEffect(() => {
+    if (!open || !projectTeamId) {
+      setAssignableUsers([])
+      return
+    }
+    setAssigneesLoading(true)
+    const usersOnProjectTeam = users.filter((u) => u.teamId === projectTeamId)
+    void api
+      .getTeam(projectTeamId)
+      .then((team) => {
+        if (team.members.length > 0) {
+          const allowed = new Set(team.members.map((m) => m.id))
+          setAssignableUsers(
+            usersOnProjectTeam.filter((u) => allowed.has(u.id)),
+          )
+        } else {
+          setAssignableUsers(usersOnProjectTeam)
+        }
+      })
+      .catch(() => {
+        setAssignableUsers(usersOnProjectTeam)
+      })
+      .finally(() => setAssigneesLoading(false))
+  }, [open, projectTeamId, users])
+
+  useEffect(() => {
     if (!open) return
     if (task) {
       setTitle(task.title)
@@ -102,8 +135,7 @@ export function TaskFormModal({
       setTitle('')
       setDescription('')
       setProjectId('')
-      const firstInTeam = users.filter((u) => u.teamId === teamId)[0]
-      setAssigneeId(firstInTeam?.id ?? '')
+      setAssigneeId('')
       setPriority('medium')
       setStatus('todo')
       setDueDate(new Date().toISOString().slice(0, 10))
@@ -132,11 +164,15 @@ export function TaskFormModal({
   }, [open, availableProjects, projectId])
 
   useEffect(() => {
-    if (!open || isEdit) return
-    if (assigneeId && !usersInTeam.some((u) => u.id === assigneeId)) {
-      setAssigneeId(usersInTeam[0]?.id ?? '')
+    if (!open || assigneesLoading) return
+    if (assignableUsers.length === 0) {
+      if (!isEdit) setAssigneeId('')
+      return
     }
-  }, [open, isEdit, teamId, assigneeId, usersInTeam])
+    if (!assigneeId || !assignableUsers.some((u) => u.id === assigneeId)) {
+      setAssigneeId(assignableUsers[0]?.id ?? '')
+    }
+  }, [open, isEdit, projectId, assignableUsers, assigneesLoading, assigneeId])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -152,8 +188,12 @@ export function TaskFormModal({
       toast.error('Select an assignee')
       return
     }
-    if (!usersInTeam.some((u) => u.id === assigneeId)) {
-      toast.error('Assignee must belong to the selected team')
+    if (!projectTeamId) {
+      toast.error('Select a project first')
+      return
+    }
+    if (!assignableUsers.some((u) => u.id === assigneeId)) {
+      toast.error('Assignee must be a member of the project team')
       return
     }
     if (!dueDate) {
@@ -180,7 +220,7 @@ export function TaskFormModal({
           priority,
           dueDate,
           assigneeId,
-          teamId,
+          teamId: projectTeamId,
           projectId,
           status,
         })
@@ -323,24 +363,44 @@ export function TaskFormModal({
             </div>
             <div className="space-y-2">
               <Label>Assignee</Label>
-              <Select value={assigneeId} onValueChange={setAssigneeId}>
+              <Select
+                value={assigneeId || undefined}
+                onValueChange={setAssigneeId}
+                disabled={
+                  !projectId ||
+                  assigneesLoading ||
+                  assignableUsers.length === 0
+                }
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Assignee" />
+                  <SelectValue
+                    placeholder={
+                      !projectId
+                        ? 'Select a project first'
+                        : assigneesLoading
+                          ? 'Loading team members…'
+                          : assignableUsers.length === 0
+                            ? 'No members on this team'
+                            : 'Select assignee'
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  {usersInTeam.length === 0 ? (
-                    <SelectItem value="__none__" disabled>
-                      No users in this team
+                  {assignableUsers.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name}
                     </SelectItem>
-                  ) : (
-                    usersInTeam.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.name}
-                      </SelectItem>
-                    ))
-                  )}
+                  ))}
                 </SelectContent>
               </Select>
+              {projectId &&
+                !assigneesLoading &&
+                assignableUsers.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Add users to this team under Team or Users, then assign
+                    tasks.
+                  </p>
+                )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
