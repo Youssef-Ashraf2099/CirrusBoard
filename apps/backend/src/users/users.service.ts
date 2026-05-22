@@ -20,6 +20,7 @@ import {
   AdminCreateUserCommand,
   AdminSetUserPasswordCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
+import { SNSClient, SubscribeCommand } from "@aws-sdk/client-sns";
 export type PublicUser = Omit<UserItem, "password">;
 
 export type CognitoLoginTokens = {
@@ -48,12 +49,23 @@ export class UsersService {
     region: CognitoConfig.region,
     endpoint: process.env.COGNITO_ENDPOINT || undefined,
   });
+  private readonly snsClient = new SNSClient({
+    region: CognitoConfig.region,
+  });
 
   constructor(
     private readonly repo: UsersRepository,
     @Inject(forwardRef(() => TeamsService))
     private readonly teams: TeamsService,
   ) {}
+
+  private getTaskNotificationsTopicArn(): string | undefined {
+    return (
+      process.env.SNS_TASK_ASSIGN_TOPIC_ARN ||
+      process.env.SNS_TASK_NOTIFICATIONS_TOPIC_ARN ||
+      "arn:aws:sns:eu-north-1:409987739232:cirrusboard-task-assign"
+    );
+  }
 
   private async enrichMemberships(user: UserItem): Promise<UserItem> {
     const teams = await this.teams.findTeamsForUser(user.userId);
@@ -95,6 +107,26 @@ export class UsersService {
             `Cognito user creation failed for ${plainEmail}: ${err.message}`,
           );
         });
+      }
+
+      const topicArn = this.getTaskNotificationsTopicArn();
+      if (plainEmail && topicArn) {
+        await this.snsClient
+          .send(
+            new SubscribeCommand({
+              Protocol: "email",
+              TopicArn: topicArn,
+              Endpoint: plainEmail,
+            }),
+          )
+          .then(() => {
+            this.logger.log(`Subscribed ${plainEmail} to task notifications`);
+          })
+          .catch((err) => {
+            this.logger.warn(
+              `SNS subscription failed for ${plainEmail}: ${err.message}`,
+            );
+          });
       }
 
       return sanitizeUser(await this.enrichMemberships(created));
