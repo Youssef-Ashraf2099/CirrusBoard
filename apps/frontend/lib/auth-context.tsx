@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const teamId = user?.teamId ?? "";
+  const teamId = user?.teamId ?? user?.teamIds?.[0] ?? "";
 
   useEffect(() => {
     const hydrate = async () => {

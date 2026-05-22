@@ -164,7 +164,10 @@ export class TasksRepository {
       return ((res as any).Items ?? []) as TaskItem[];
     } catch (error: any) {
       const message = String(error?.message ?? error ?? "");
-      if (!message.includes("specified index") && !message.includes(indexName)) {
+      if (
+        !message.includes("specified index") &&
+        !message.includes(indexName)
+      ) {
         throw error;
       }
 

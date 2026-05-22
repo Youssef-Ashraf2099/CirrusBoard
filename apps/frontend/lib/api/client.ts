@@ -432,7 +432,10 @@ export const api = {
 
   async listNotifications(userId: string): Promise<Notification[]> {
     const path = `/api/notifications?userId=${encodeURIComponent(userId)}`;
-    console.log("[CirrusBoard:Notifications] api.listNotifications → GET", path);
+    console.log(
+      "[CirrusBoard:Notifications] api.listNotifications → GET",
+      path,
+    );
     try {
       const rows = await request<ApiNotification[]>(path);
       console.log("[CirrusBoard:Notifications] api.listNotifications ← OK", {
@@ -441,7 +444,10 @@ export const api = {
       });
       return rows.map(mapApiNotificationToNotification);
     } catch (err) {
-      console.error("[CirrusBoard:Notifications] api.listNotifications ← FAILED", err);
+      console.error(
+        "[CirrusBoard:Notifications] api.listNotifications ← FAILED",
+        err,
+      );
       throw err;
     }
   },
@@ -453,44 +459,69 @@ export const api = {
     message: string;
     link?: string;
   }): Promise<Notification> {
-    console.log("[CirrusBoard:Notifications] api.createNotification → POST /api/notifications", input);
+    console.log(
+      "[CirrusBoard:Notifications] api.createNotification → POST /api/notifications",
+      input,
+    );
     try {
       const raw = await request<ApiNotification>("/api/notifications", {
         method: "POST",
         json: input,
       });
-      console.log("[CirrusBoard:Notifications] api.createNotification ← OK", raw);
+      console.log(
+        "[CirrusBoard:Notifications] api.createNotification ← OK",
+        raw,
+      );
       return mapApiNotificationToNotification(raw);
     } catch (err) {
-      console.error("[CirrusBoard:Notifications] api.createNotification ← FAILED", err);
+      console.error(
+        "[CirrusBoard:Notifications] api.createNotification ← FAILED",
+        err,
+      );
       throw err;
     }
   },
 
   async patchNotification(id: string, read: boolean): Promise<Notification> {
     const path = `/api/notifications/${encodeURIComponent(id)}`;
-    console.log("[CirrusBoard:Notifications] api.patchNotification → PATCH", path, { read });
+    console.log(
+      "[CirrusBoard:Notifications] api.patchNotification → PATCH",
+      path,
+      { read },
+    );
     try {
       const raw = await request<ApiNotification>(path, {
         method: "PATCH",
         json: { read },
       });
-      console.log("[CirrusBoard:Notifications] api.patchNotification ← OK", raw);
+      console.log(
+        "[CirrusBoard:Notifications] api.patchNotification ← OK",
+        raw,
+      );
       return mapApiNotificationToNotification(raw);
     } catch (err) {
-      console.error("[CirrusBoard:Notifications] api.patchNotification ← FAILED", err);
+      console.error(
+        "[CirrusBoard:Notifications] api.patchNotification ← FAILED",
+        err,
+      );
       throw err;
     }
   },
 
   async deleteNotification(id: string): Promise<void> {
     const path = `/api/notifications/${encodeURIComponent(id)}`;
-    console.log("[CirrusBoard:Notifications] api.deleteNotification → DELETE", path);
+    console.log(
+      "[CirrusBoard:Notifications] api.deleteNotification → DELETE",
+      path,
+    );
     try {
       await request(path, { method: "DELETE" });
       console.log("[CirrusBoard:Notifications] api.deleteNotification ← OK");
     } catch (err) {
-      console.error("[CirrusBoard:Notifications] api.deleteNotification ← FAILED", err);
+      console.error(
+        "[CirrusBoard:Notifications] api.deleteNotification ← FAILED",
+        err,
+      );
       throw err;
     }
   },
@@ -507,7 +538,10 @@ export const api = {
         sample: rows?.[0],
       });
       const users = await this.listUsers(teamId).catch((e) => {
-        console.warn("[CirrusBoard:Activity] listUsers for mapping failed (non-fatal)", e);
+        console.warn(
+          "[CirrusBoard:Activity] listUsers for mapping failed (non-fatal)",
+          e,
+        );
         return [];
       });
       const map = buildUserMap(users);
@@ -530,7 +564,10 @@ export const api = {
     targetId: string;
     taskId?: string;
   }): Promise<ActivityItem> {
-    console.log("[CirrusBoard:Activity] api.createActivity → POST /api/activity", input);
+    console.log(
+      "[CirrusBoard:Activity] api.createActivity → POST /api/activity",
+      input,
+    );
     try {
       const raw = await request<ApiActivity>("/api/activity", {
         method: "POST",
@@ -538,7 +575,10 @@ export const api = {
       });
       console.log("[CirrusBoard:Activity] api.createActivity ← OK", raw);
       const users = await this.listUsers(input.teamId).catch((e) => {
-        console.warn("[CirrusBoard:Activity] listUsers for mapping failed (non-fatal)", e);
+        console.warn(
+          "[CirrusBoard:Activity] listUsers for mapping failed (non-fatal)",
+          e,
+        );
         return [];
       });
       const map = buildUserMap(users);
@@ -713,21 +753,17 @@ export const api = {
       },
     );
     const users = await this.listUsers().catch(() => []);
-    return mapApiAuditLogToTaskAuditLog(
-      taskId,
-      raw,
-      buildUserMap(users),
-    );
+    return mapApiAuditLogToTaskAuditLog(taskId, raw, buildUserMap(users));
   },
 
   async resizeTaskAttachment(
     taskId: string,
     body: { attachmentId?: string; key?: string; functionName?: string },
   ): Promise<unknown> {
-    return request(
-      `/api/tasks/${encodeURIComponent(taskId)}/resize`,
-      { method: "POST", json: body },
-    );
+    return request(`/api/tasks/${encodeURIComponent(taskId)}/resize`, {
+      method: "POST",
+      json: body,
+    });
   },
 
   async deleteTask(id: string) {
