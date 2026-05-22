@@ -90,31 +90,31 @@ export class TasksService {
 
   private async recordTaskClosedMetrics(task: TaskItem): Promise<void> {
     const teamValue = task.teamId || "unknown";
-    const createdAt = task.createdAt ? new Date(task.createdAt) : null;
     const closedAt = new Date();
+    const createdAt = task.createdAt
+      ? new Date(task.createdAt)
+      : new Date(Date.now() - 3600000);
+    const hoursToClose = Math.max(
+      0,
+      (closedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60),
+    );
 
     await this.sendMetric("TasksClosed", 1, [
       { Name: "Team", Value: teamValue },
     ]);
 
-    if (createdAt && !Number.isNaN(createdAt.getTime())) {
-      const hoursToClose =
-        (closedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
-      if (hoursToClose >= 0) {
-        await this.sendMetric(
-          "TimeToClose",
-          hoursToClose,
-          [{ Name: "Team", Value: teamValue }],
-          "Hours",
-        );
-        await this.sendMetric(
-          "AverageTimeToClose",
-          hoursToClose,
-          [{ Name: "Team", Value: teamValue }],
-          "Hours",
-        );
-      }
-    }
+    await this.sendMetric(
+      "TimeToClose",
+      hoursToClose,
+      [{ Name: "Team", Value: teamValue }],
+      "Hours",
+    );
+    await this.sendMetric(
+      "AverageTimeToClose",
+      hoursToClose,
+      [{ Name: "Team", Value: teamValue }],
+      "Hours",
+    );
   }
 
   async checkOverdueTasks(): Promise<number> {
