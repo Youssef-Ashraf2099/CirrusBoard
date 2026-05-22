@@ -50,7 +50,6 @@ function progressForProject(projectId: string, tasks: Task[]) {
 export default function ProjectsPage() {
   const { teamId, user } = useAuth()
   const canManage = isPrivilegedRole(user?.role)
-  const canViewAllTeams = canManage
   const [projects, setProjects] = useState<Project[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [members, setMembers] = useState<User[]>([])
@@ -65,7 +64,7 @@ export default function ProjectsPage() {
     try {
       const [p, t, u] = await Promise.all([
         api.listProjects(teamId),
-        api.loadTasksWithMeta(teamId, { employeeScope: !canViewAllTeams }),
+        api.loadTasksWithMeta(teamId),
         api.listUsers(teamId),
       ])
       setProjects(p)

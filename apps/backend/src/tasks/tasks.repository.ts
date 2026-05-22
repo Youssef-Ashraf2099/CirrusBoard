@@ -1,5 +1,4 @@
-import { Injectable, Inject, Logger } from "@nestjs/common";
-import { normalizeTeamId } from "../common/team-id.utils";
+import { Injectable, Inject } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import {
   DynamoDBDocumentClient,
@@ -14,8 +13,6 @@ import { TaskItem } from "./tasks.model";
 
 @Injectable()
 export class TasksRepository {
-  private readonly logger = new Logger(TasksRepository.name);
-
   constructor(
     @Inject("DYNAMO_CLIENT") private readonly client: DynamoDBDocumentClient,
     @Inject("TASKS_TABLE") private readonly tableName: string,
@@ -140,62 +137,30 @@ export class TasksRepository {
     teamId: string,
     indexName = process.env.TASKS_TEAM_GSI || "teamId-index",
   ): Promise<TaskItem[]> {
-    const normalized = normalizeTeamId(teamId);
-    try {
-      const cmd = new QueryCommand({
-        TableName: this.tableName,
-        IndexName: indexName,
-        KeyConditionExpression: "#teamId = :teamId",
-        ExpressionAttributeNames: { "#teamId": "teamId" },
-        ExpressionAttributeValues: { ":teamId": teamId },
-      });
-      const res = await this.client.send(cmd as any);
-      const items = ((res as any).Items ?? []) as TaskItem[];
-      if (items.length > 0) return items;
-    } catch (err) {
-      this.logger.warn(
-        `Tasks team GSI query failed (${indexName}), falling back to scan: ${
-          err instanceof Error ? err.message : err
-        }`,
-      );
-    }
-
-    const scanned = await this.listAllTasks(500);
-    return scanned.filter(
-      (t) => normalizeTeamId(t.teamId) === normalized,
-    );
+    const cmd = new QueryCommand({
+      TableName: this.tableName,
+      IndexName: indexName,
+      KeyConditionExpression: "#teamId = :teamId",
+      ExpressionAttributeNames: { "#teamId": "teamId" },
+      ExpressionAttributeValues: { ":teamId": teamId },
+    });
+    const res = await this.client.send(cmd as any);
+    return ((res as any).Items ?? []) as TaskItem[];
   }
 
   async queryTasksByAssigneeId(
     assigneeId: string,
-    fallbackTeamId?: string,
     indexName = process.env.TASKS_ASSIGNEE_GSI || "assigneeId-index",
   ): Promise<TaskItem[]> {
-    try {
-      const cmd = new QueryCommand({
-        TableName: this.tableName,
-        IndexName: indexName,
-        KeyConditionExpression: "#assigneeId = :assigneeId",
-        ExpressionAttributeNames: { "#assigneeId": "assigneeId" },
-        ExpressionAttributeValues: { ":assigneeId": assigneeId },
-      });
-      const res = await this.client.send(cmd as any);
-      return ((res as any).Items ?? []) as TaskItem[];
-    } catch (err) {
-      this.logger.warn(
-        `Tasks assignee GSI query failed (${indexName}), using fallback: ${
-          err instanceof Error ? err.message : err
-        }`,
-      );
-    }
-
-    if (fallbackTeamId) {
-      const teamTasks = await this.queryTasksByTeamId(fallbackTeamId);
-      return teamTasks.filter((t) => t.assigneeId === assigneeId);
-    }
-
-    const scanned = await this.listAllTasks(500);
-    return scanned.filter((t) => t.assigneeId === assigneeId);
+    const cmd = new QueryCommand({
+      TableName: this.tableName,
+      IndexName: indexName,
+      KeyConditionExpression: "#assigneeId = :assigneeId",
+      ExpressionAttributeNames: { "#assigneeId": "assigneeId" },
+      ExpressionAttributeValues: { ":assigneeId": assigneeId },
+    });
+    const res = await this.client.send(cmd as any);
+    return ((res as any).Items ?? []) as TaskItem[];
   }
 
   /** Manager company-wide listing (demo-scale scan). */
