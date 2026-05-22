@@ -8,6 +8,7 @@ TEAMS_TABLE=${TEAMS_TABLE:-Teams}
 PROJECTS_TABLE=${PROJECTS_TABLE:-Projects}
 TASKS_TABLE=${TASKS_TABLE:-Tasks}
 COMMENTS_TABLE=${COMMENTS_TABLE:-Comments}
+NOTIFICATIONS_TABLE=${NOTIFICATIONS_TABLE:-Notifications}
 TASK_AUDIT_LOGS_TABLE=${TASK_AUDIT_LOGS_TABLE:-TaskAuditLogs}
 
 ########################################################
@@ -259,6 +260,21 @@ aws dynamodb create-table \
       }
     }
   ]' \
+  --endpoint-url "${DYNAMODB_ENDPOINT}" || true
+
+########################################################
+# NOTIFICATIONS TABLE
+########################################################
+
+echo "Creating Notifications table..."
+
+aws dynamodb create-table \
+  --table-name "${NOTIFICATIONS_TABLE}" \
+  --attribute-definitions \
+      AttributeName=PK,AttributeType=S \
+  --key-schema \
+      AttributeName=PK,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
   --endpoint-url "${DYNAMODB_ENDPOINT}" || true
 
 ########################################################

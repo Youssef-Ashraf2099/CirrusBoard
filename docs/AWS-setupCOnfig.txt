@@ -25,7 +25,7 @@ node --version
 
  aws ssm start-session --target OUTPUT el Command ellyFO2 --region eu-north-1
 
-
+aws ssm start-session --target i-0f4fde6edb87bbbfe --region eu-north-1
 
 
 
@@ -33,3 +33,5 @@ node --version
 cd /app/apps/frontend  #useed one
 /appBack/apps/frontend/
 /appBack/apps/backend/  #used one
+/tmp/lambda-resize
+

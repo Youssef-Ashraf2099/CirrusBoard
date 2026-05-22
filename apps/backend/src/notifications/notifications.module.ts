@@ -7,8 +7,7 @@ import { NotificationsController } from "./notifications.controller";
 
 const dynamoClientProvider = {
   provide: "DYNAMO_CLIENT",
-  useFactory: () =>
-    DynamoDBDocumentClient.from(createSharedDynamoDBClient()),
+  useFactory: () => DynamoDBDocumentClient.from(createSharedDynamoDBClient()),
 };
 
 const tableProvider = {
@@ -24,5 +23,6 @@ const tableProvider = {
     NotificationsRepository,
     NotificationsService,
   ],
+  exports: [NotificationsService],
 })
 export class NotificationsModule {}
