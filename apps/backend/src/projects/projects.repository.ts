@@ -1,4 +1,4 @@
-import { Injectable, Inject } from "@nestjs/common";
+import { Injectable, Inject, Logger } from "@nestjs/common";
 import {
   DynamoDBDocumentClient,
   PutCommand,
@@ -6,11 +6,15 @@ import {
   UpdateCommand,
   DeleteCommand,
   QueryCommand,
+  ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { normalizeTeamId } from "../common/team-id.utils";
 import { ProjectItem } from "./projects.model";
 
 @Injectable()
 export class ProjectsRepository {
+  private readonly logger = new Logger(ProjectsRepository.name);
+
   constructor(
     @Inject("DYNAMO_CLIENT") private readonly client: DynamoDBDocumentClient,
     @Inject("PROJECTS_TABLE") private readonly tableName: string,
@@ -114,17 +118,38 @@ export class ProjectsRepository {
 
   async queryProjectsByTeam(
     teamId: string,
-    indexName = "teamId-index",
+    indexName = process.env.PROJECTS_TEAM_GSI || "teamId-index",
   ): Promise<ProjectItem[]> {
+    const normalized = normalizeTeamId(teamId);
+    try {
+      const res = await this.client.send(
+        new QueryCommand({
+          TableName: this.tableName,
+          IndexName: indexName,
+          KeyConditionExpression: "#teamId = :teamId",
+          ExpressionAttributeNames: { "#teamId": "teamId" },
+          ExpressionAttributeValues: { ":teamId": teamId },
+        }) as any,
+      );
+      const items = ((res as any).Items ?? []) as ProjectItem[];
+      if (items.length > 0) return items;
+    } catch (err) {
+      this.logger.warn(
+        `Projects team GSI query failed (${indexName}), falling back to scan: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
+
     const res = await this.client.send(
-      new QueryCommand({
+      new ScanCommand({
         TableName: this.tableName,
-        IndexName: indexName,
-        KeyConditionExpression: "#teamId = :teamId",
-        ExpressionAttributeNames: { "#teamId": "teamId" },
-        ExpressionAttributeValues: { ":teamId": teamId },
+        Limit: 200,
       }) as any,
     );
-    return (res as any).Items ?? [];
+    const items = ((res as any).Items ?? []) as ProjectItem[];
+    return items.filter(
+      (p) => normalizeTeamId(p.teamId) === normalized,
+    );
   }
 }
