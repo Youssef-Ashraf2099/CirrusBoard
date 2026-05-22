@@ -112,7 +112,7 @@ export default function TasksPage() {
         teamId,
       );
       const [p, tRaw, mu] = await Promise.all([
-        api.listProjects(scopeTeam, { employeeScope: !canViewAllTeams }),
+        scopeTeam ? api.listProjects(scopeTeam) : Promise.resolve([]),
         api.loadTasksWithMeta(scopeTeam, {
           employeeScope: !canViewAllTeams,
         }),

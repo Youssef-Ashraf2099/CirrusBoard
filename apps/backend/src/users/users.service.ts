@@ -1,14 +1,11 @@
 import {
   HttpException,
   HttpStatus,
-  Inject,
   Injectable,
   Logger,
   NotFoundException,
   UnauthorizedException,
-  forwardRef,
 } from "@nestjs/common";
-import { TeamsService } from "../teams/teams.service";
 import { createHmac } from "crypto";
 import { UsersRepository } from "./users.repository";
 import { UserItem } from "./users.model";
@@ -49,11 +46,7 @@ export class UsersService {
     endpoint: process.env.COGNITO_ENDPOINT || undefined,
   });
 
-  constructor(
-    private readonly repo: UsersRepository,
-    @Inject(forwardRef(() => TeamsService))
-    private readonly teamsService?: TeamsService,
-  ) {}
+  constructor(private readonly repo: UsersRepository) {}
 
   async createUser(input: Partial<UserItem>): Promise<PublicUser> {
     try {
@@ -61,18 +54,6 @@ export class UsersService {
       const plainEmail = input.email?.trim().toLowerCase();
 
       const created = await this.repo.createUser(input);
-
-      if (created.primaryTeamId && this.teamsService) {
-        await this.teamsService
-          .addMemberToTeamRecord(created.primaryTeamId, created.userId)
-          .catch((err) => {
-            this.logger.warn(
-              `Team membership sync failed for ${created.userId}: ${
-                err instanceof Error ? err.message : err
-              }`,
-            );
-          });
-      }
 
       if (plainEmail && plainPassword) {
         await this.createCognitoUser(plainEmail, plainPassword).catch((err) => {
@@ -140,18 +121,6 @@ export class UsersService {
     updates: Partial<UserItem>,
   ): Promise<PublicUser> {
     const updated = await this.repo.updateUser(userId, updates);
-
-    if (updates.primaryTeamId && this.teamsService) {
-      await this.teamsService
-        .addMemberToTeamRecord(updates.primaryTeamId, userId)
-        .catch((err) => {
-          this.logger.warn(
-            `Team membership sync failed for ${userId}: ${
-              err instanceof Error ? err.message : err
-            }`,
-          );
-        });
-    }
 
     // Sync new password to Cognito if it changed
     if (updates.password && updated.email) {

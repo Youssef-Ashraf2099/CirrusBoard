@@ -400,14 +400,6 @@ export const api = {
     return mapApiTeamToTeam(raw);
   },
 
-  /** Users on a team (primaryTeamId + team registry memberUserIds). */
-  async listTeamMembers(teamId: string): Promise<User[]> {
-    const rows = await request<ApiUser[]>(
-      `/api/teams/${encodeURIComponent(teamId)}/members`,
-    );
-    return rows.map(mapApiUserToUser);
-  },
-
   async createTeam(input: {
     name: string;
     description?: string;
@@ -560,16 +552,10 @@ export const api = {
     }
   },
 
-  /** List projects: employees always get own team; managers get all or optional team filter. */
-  async listProjects(
-    teamId?: string,
-    options?: { employeeScope?: boolean },
-  ): Promise<Project[]> {
-    const path =
-      options?.employeeScope || teamId == null || teamId === ""
-        ? "/api/projects"
-        : `/api/projects?teamId=${encodeURIComponent(teamId)}`;
-    const rows = await request<ApiProject[]>(path);
+  async listProjects(teamId: string): Promise<Project[]> {
+    const rows = await request<ApiProject[]>(
+      `/api/projects/team/${encodeURIComponent(teamId)}`,
+    );
     return rows.map(mapApiProjectToProject);
   },
 
@@ -609,7 +595,6 @@ export const api = {
     patch: Partial<{
       name: string;
       description: string;
-      teamId: string;
       status: "ACTIVE" | "ARCHIVED" | "COMPLETED";
       progress?: number;
       startDate?: string;
