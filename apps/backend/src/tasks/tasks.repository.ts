@@ -176,6 +176,14 @@ export class TasksRepository {
     }
   }
 
+  async queryTasksByDeadline(deadline: string): Promise<TaskItem[]> {
+    const items = await this.listAllTasks();
+    return items.filter((task) => {
+      const taskDeadline = task.deadline ?? "";
+      return taskDeadline <= deadline;
+    });
+  }
+
   /** Manager company-wide listing (demo-scale scan). */
   async listAllTasks(limit = 500): Promise<TaskItem[]> {
     const items: TaskItem[] = [];

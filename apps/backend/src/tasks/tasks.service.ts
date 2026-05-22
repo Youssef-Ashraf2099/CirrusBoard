@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from "@nestjs/common";
 import { TasksRepository } from "./tasks.repository";
 import { TaskItem, Attachment } from "./tasks.model";
@@ -20,9 +21,18 @@ import { AuditLogsService } from "../audit-logs/audit-logs.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { ProjectsRepository } from "../projects/projects.repository";
 import { isTeamMember } from "../common/permissions";
-
+import {
+  CloudWatchClient,
+  PutMetricDataCommand,
+} from "@aws-sdk/client-cloudwatch";
+import { AwsConfig } from "../config/aws.config";
 @Injectable()
 export class TasksService {
+  private readonly logger = new Logger(TasksService.name);
+  private readonly cloudwatchClient = new CloudWatchClient({
+    region: AwsConfig.region,
+  });
+
   constructor(
     private readonly repo: TasksRepository,
     private readonly usersRepo: UsersRepository,
@@ -36,6 +46,78 @@ export class TasksService {
 
   private normalizeTeamId(teamId: string): string {
     return teamId.replace(/^TEAM#/, "");
+  }
+
+  private isClosedStatus(status?: TaskItem["status"] | string): boolean {
+    return status === "DONE" || status === "CLOSED" || status === "COMPLETED";
+  }
+
+  private async sendMetric(
+    metricName: string,
+    value: number,
+    dimensions?: { Name: string; Value: string }[],
+    unit: "Count" | "Hours" = "Count",
+  ): Promise<void> {
+    try {
+      await this.cloudwatchClient.send(
+        new PutMetricDataCommand({
+          Namespace: "CirrusBoard",
+          MetricData: [
+            {
+              MetricName: metricName,
+              Value: value,
+              Unit: unit as any,
+              ...(dimensions && dimensions.length > 0
+                ? { Dimensions: dimensions }
+                : {}),
+            },
+          ],
+        }),
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Failed to send ${metricName} metric: ${message}`);
+    }
+  }
+
+  private async recordTaskCreatedMetric(teamId?: string): Promise<void> {
+    await this.sendMetric(
+      "TasksCreated",
+      1,
+      teamId ? [{ Name: "Team", Value: teamId }] : undefined,
+    );
+  }
+
+  private async recordTaskClosedMetrics(task: TaskItem): Promise<void> {
+    const teamValue = task.teamId || "unknown";
+    const createdAt = task.createdAt ? new Date(task.createdAt) : null;
+    const closedAt = new Date();
+
+    await this.sendMetric("TasksClosed", 1, [
+      { Name: "Team", Value: teamValue },
+    ]);
+
+    if (createdAt && !Number.isNaN(createdAt.getTime())) {
+      const hoursToClose =
+        (closedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+      if (hoursToClose >= 0) {
+        await this.sendMetric(
+          "TimeToClose",
+          hoursToClose,
+          [{ Name: "Team", Value: teamValue }],
+          "Hours",
+        );
+      }
+    }
+  }
+
+  async checkOverdueTasks(): Promise<number> {
+    const today = new Date().toISOString().split("T")[0];
+    const tasks = await this.repo.queryTasksByDeadline(today);
+    const overdue = tasks.filter((task) => !this.isClosedStatus(task.status));
+
+    await this.sendMetric("OverdueTasks", overdue.length, undefined, "Count");
+    return overdue.length;
   }
 
   private async resolveUser(userId: string): Promise<UserItem | null> {
@@ -183,6 +265,7 @@ export class TasksService {
       updatedAt: now,
     };
     const created = await this.repo.createTask(task as any);
+    void this.recordTaskCreatedMetric(created.teamId);
     await this.recordAuditLog(
       created.taskId,
       actor.userId,
@@ -232,6 +315,13 @@ export class TasksService {
       statusDeadline: `${status}#${task.deadline}`,
     };
     const updated = await this.repo.updateTask(taskId, updates);
+    if (!this.isClosedStatus(task.status) && this.isClosedStatus(status)) {
+      void this.recordTaskClosedMetrics({
+        ...task,
+        ...updated,
+        status,
+      });
+    }
     await this.recordAuditLog(
       taskId,
       actor.userId,
@@ -349,7 +439,19 @@ export class TasksService {
       const mergedDeadline = input.deadline ?? task.deadline;
       updates.statusDeadline = `${mergedStatus}#${mergedDeadline}`;
     }
-    return this.repo.updateTask(taskId, updates);
+    const updated = await this.repo.updateTask(taskId, updates);
+    if (
+      input.status !== undefined &&
+      !this.isClosedStatus(task.status) &&
+      this.isClosedStatus(input.status)
+    ) {
+      void this.recordTaskClosedMetrics({
+        ...task,
+        ...updated,
+        status: input.status as TaskItem["status"],
+      });
+    }
+    return updated;
   }
 
   async deleteTask(actor: UserItem, taskId: string): Promise<void> {
