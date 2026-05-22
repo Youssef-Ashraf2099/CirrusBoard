@@ -128,10 +128,13 @@ export function buildCognitoUserItem(
 
   const primaryTeamId =
     normalizePrimaryTeamId(claims) ?? existing?.primaryTeamId;
-  const teamIds = normalizeTeamIds(claims);
-  if (primaryTeamId && !teamIds.includes(primaryTeamId)) {
-    teamIds.unshift(primaryTeamId);
+  const teamIds = [...normalizeTeamIds(claims), ...(existing?.teamIds ?? [])];
+  if (primaryTeamId) {
+    teamIds.push(primaryTeamId);
   }
+  const uniqueTeamIds = [
+    ...new Set(teamIds.map((teamId) => String(teamId)).filter(Boolean)),
+  ];
 
   return {
     PK: existing?.PK ?? `USER#${cognitoSub}`,
@@ -149,7 +152,7 @@ export function buildCognitoUserItem(
     role, // ← uses existing DB role
     password: existing?.password,
     primaryTeamId,
-    teamIds,
+    teamIds: uniqueTeamIds,
     cognitoSub,
     isActive: existing?.isActive ?? true,
     createdAt: existing?.createdAt ?? now,
