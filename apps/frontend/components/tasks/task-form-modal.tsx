@@ -41,6 +41,7 @@ interface TaskFormModalProps {
   teamId: string
   task?: Task | null
   onSaved: () => void
+  /** After create (and uploads), opens detail view with fresh task from API. */
   onTaskCreated?: (task: Task) => void
 }
 
@@ -67,14 +68,8 @@ export function TaskFormModal({
   const [teamProjects, setTeamProjects] = useState<Project[]>([])
   const [projectsLoading, setProjectsLoading] = useState(false)
 
-  // NEW (from HEAD): project-based assignees
-  const [assignableUsers, setAssignableUsers] = useState<User[]>([])
-  const [assigneesLoading, setAssigneesLoading] = useState(false)
-
   const isEdit = !!task
-
   const usersInTeam = users.filter((u) => u.teamId === teamId)
-
   const availableProjects =
     teamProjects.length > 0
       ? teamProjects
@@ -93,31 +88,8 @@ export function TaskFormModal({
       .finally(() => setProjectsLoading(false))
   }, [open, teamId])
 
-  // ✅ KEEP (HEAD): load employees for selected project
-  useEffect(() => {
-    if (!open || !projectId) {
-      setAssignableUsers([])
-      return
-    }
-
-    setAssigneesLoading(true)
-
-    void api
-      .getProject(projectId, true)
-      .then((project) => {
-        const employees = (project.members ?? []).filter(
-          (u) => u.role === 'employee',
-        )
-        setAssignableUsers(employees)
-      })
-      .catch(() => setAssignableUsers([]))
-      .finally(() => setAssigneesLoading(false))
-  }, [open, projectId])
-
-  // original form init effect
   useEffect(() => {
     if (!open) return
-
     if (task) {
       setTitle(task.title)
       setDescription(task.description ?? '')
@@ -136,9 +108,7 @@ export function TaskFormModal({
       setStatus('todo')
       setDueDate(new Date().toISOString().slice(0, 10))
     }
-
     setUploads([])
-
     if (task) {
       setEditAttachments(task.attachments ?? [])
       void api
@@ -161,37 +131,37 @@ export function TaskFormModal({
     }
   }, [open, availableProjects, projectId])
 
+  useEffect(() => {
+    if (!open || isEdit) return
+    if (assigneeId && !usersInTeam.some((u) => u.id === assigneeId)) {
+      setAssigneeId(usersInTeam[0]?.id ?? '')
+    }
+  }, [open, isEdit, teamId, assigneeId, usersInTeam])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-
     if (!title.trim()) {
       toast.error('Title is required')
       return
     }
-
     if (!projectId) {
       toast.error('Select a project')
       return
     }
-
     if (!assigneeId) {
       toast.error('Select an assignee')
       return
     }
-
-    // ✅ FIXED: project-based validation (merged logic)
-    if (!assignableUsers.some((u) => u.id === assigneeId)) {
-      toast.error('Assignee must be an employee assigned to this project')
+    if (!usersInTeam.some((u) => u.id === assigneeId)) {
+      toast.error('Assignee must belong to the selected team')
       return
     }
-
     if (!dueDate) {
       toast.error('Due date is required')
       return
     }
 
     setSubmitting(true)
-
     try {
       if (task) {
         await api.patchTask(task.id, {
@@ -215,22 +185,77 @@ export function TaskFormModal({
           status,
         })
 
-        toast.success('Task created')
+        const pendingFiles = uploads
+          .filter((u) => u.status === 'staged')
+          .map((u) => u.file)
 
+        if (pendingFiles.length > 0) {
+          try {
+            const stagedItems = uploads.filter((u) => u.status === 'staged')
+            for (const item of stagedItems) {
+              setUploads((prev) =>
+                patchStagedUploads(prev, item.id, {
+                  status: 'uploading',
+                  progress: 0,
+                }),
+              )
+              const updated = await uploadTaskAttachments(
+                created.taskId,
+                [item.file],
+                (_idx, percent) => {
+                  setUploads((prev) =>
+                    patchStagedUploads(prev, item.id, {
+                      progress: percent,
+                      status: 'uploading',
+                    }),
+                  )
+                },
+              )
+              if (updated?.attachments?.length) {
+                setEditAttachments(updated.attachments)
+              }
+              setUploads((prev) =>
+                patchStagedUploads(prev, item.id, {
+                  status: 'complete',
+                  progress: 100,
+                }),
+              )
+            }
+          } catch (uploadErr) {
+            const msg =
+              uploadErr instanceof ApiError
+                ? uploadErr.message
+                : 'Task created but file upload failed'
+            toast.error(msg)
+            try {
+              const fullTask = await api.getTaskWithMeta(created.taskId)
+              onTaskCreated?.(fullTask)
+            } catch {
+              onTaskCreated?.(
+                mapApiTaskToTask(created, buildUserMap(users), 0),
+              )
+            }
+            onSaved()
+            onOpenChange(false)
+            return
+          }
+        }
+
+        toast.success('Task created')
         try {
           const fullTask = await api.getTaskWithMeta(created.taskId)
           onTaskCreated?.(fullTask)
         } catch {
           onTaskCreated?.(
-            mapApiTaskToTask(created, buildUserMap(users), 0),
+            mapApiTaskToTask(created, buildUserMap(users), editAttachments.length),
           )
         }
       }
-
       onSaved()
       onOpenChange(false)
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Something went wrong'
+      const msg =
+        err instanceof ApiError ? err.message : 'Something went wrong'
       toast.error(msg)
     } finally {
       setSubmitting(false)
@@ -243,65 +268,163 @@ export function TaskFormModal({
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit task' : 'Create task'}</DialogTitle>
         </DialogHeader>
-
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
-            <Label>Project</Label>
-            <Select
-              value={projectId || undefined}
-              onValueChange={setProjectId}
-              disabled={projectsLoading}
-            >
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    projectsLoading
-                      ? 'Loading projects…'
-                      : 'Select a project'
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {availableProjects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="task-title">Title</Label>
+            <Input
+              id="task-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Short title"
+            />
           </div>
-
           <div className="space-y-2">
-            <Label>Assignee</Label>
-            <Select value={assigneeId} onValueChange={setAssigneeId}>
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    !projectId
-                      ? 'Select a project first'
-                      : assigneesLoading
-                        ? 'Loading employees…'
-                        : assignableUsers.length === 0
-                          ? 'No employees in this project'
-                          : 'Select assignee'
-                  }
-                />
-              </SelectTrigger>
-
-              <SelectContent>
-                {(assignableUsers.length > 0
-                  ? assignableUsers
-                  : usersInTeam
-                ).map((u) => (
-                  <SelectItem key={u.id} value={u.id}>
-                    {u.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="task-desc">Description</Label>
+            <Textarea
+              id="task-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Details, acceptance criteria…"
+              className="min-h-[120px] text-base"
+            />
           </div>
-
-          <DialogFooter>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Project</Label>
+              <Select
+                value={projectId || undefined}
+                onValueChange={setProjectId}
+                disabled={projectsLoading || availableProjects.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      projectsLoading
+                        ? 'Loading projects…'
+                        : availableProjects.length === 0
+                          ? 'No projects for this team'
+                          : 'Select a project'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableProjects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!projectsLoading && availableProjects.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Create a project for this team first, then assign the task.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Assignee</Label>
+              <Select value={assigneeId} onValueChange={setAssigneeId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Assignee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {usersInTeam.length === 0 ? (
+                    <SelectItem value="__none__" disabled>
+                      No users in this team
+                    </SelectItem>
+                  ) : (
+                    usersInTeam.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Priority</Label>
+              <Select
+                value={priority}
+                onValueChange={(v) => setPriority(v as TaskPriority)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={status}
+                onValueChange={(v) => setStatus(v as TaskStatus)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todo">To do</SelectItem>
+                  <SelectItem value="in_progress">In progress</SelectItem>
+                  <SelectItem value="review">Review</SelectItem>
+                  <SelectItem value="done">Done</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="task-due">Due date</Label>
+            <Input
+              id="task-due"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Attachments</Label>
+            {isEdit && task ? (
+              <p className="text-xs text-muted-foreground mb-2">
+                Save task fields above, then add files below (uploads go to S3).
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground mb-2">
+                Files upload to S3 after the task is created.
+              </p>
+            )}
+            {!isEdit ? (
+              <FileUploadDropzone value={uploads} onChange={setUploads} />
+            ) : (
+              task && (
+                <TaskAttachmentsPanel
+                  taskId={task.id}
+                  attachments={editAttachments}
+                  onAttachmentsChange={async () => {
+                    try {
+                      const raw = await api.getTask(task.id)
+                      const mapped = mapApiTaskToTask(
+                        raw,
+                        buildUserMap(users),
+                        0,
+                      )
+                      setEditAttachments(mapped.attachments ?? [])
+                    } catch {
+                      /* panel already refreshed its list */
+                    }
+                    onSaved()
+                  }}
+                />
+              )
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
               variant="outline"
