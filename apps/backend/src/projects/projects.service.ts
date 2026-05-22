@@ -8,7 +8,7 @@ import { ProjectsRepository } from "./projects.repository";
 import { ProjectItem } from "./projects.model";
 import { v4 as uuidv4 } from "uuid";
 import { UserItem } from "../users/users.model";
-import { isPrivileged } from "../common/permissions";
+import { isPrivileged, isTeamMember } from "../common/permissions";
 import type { CreateProjectDto } from "./dto/create-project.dto";
 import type { UpdateProjectDto } from "./dto/update-project.dto";
 import { UsersService, type PublicUser } from "../users/users.service";
@@ -141,7 +141,7 @@ export class ProjectsService {
     actor: UserItem,
     teamId: string,
   ): Promise<ProjectItem[]> {
-    if (!isPrivileged(actor.role) && actor.primaryTeamId !== teamId) {
+    if (!isPrivileged(actor.role) && !isTeamMember(actor, teamId)) {
       throw new ForbiddenException("Access denied");
     }
     const all = await this.repo.queryProjectsByTeam(teamId);
