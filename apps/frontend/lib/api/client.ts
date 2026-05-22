@@ -294,10 +294,13 @@ async function request<T>(
       const tag = path.includes("/activity") ? "Activity" : "Notifications";
       console.error(`[CirrusBoard:${tag}] HTTP ${res.status} ${path}`, errBody);
     }
-    const msg =
-      typeof errBody === "object" && errBody && "message" in errBody
-        ? String((errBody as { message?: string }).message)
-        : res.statusText;
+    let msg = res.statusText;
+    if (typeof errBody === "object" && errBody && "message" in errBody) {
+      const raw = (errBody as { message?: string | string[] }).message;
+      msg = Array.isArray(raw) ? raw.join(", ") : String(raw ?? msg);
+    } else if (typeof errBody === "string" && errBody.trim()) {
+      msg = errBody;
+    }
     throw new ApiError(res.status, msg || "Request failed", errBody);
   }
 
