@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -81,10 +81,17 @@ export function TaskFormModal({
     items.filter(
       (user, index, all) => all.findIndex((x) => x.id === user.id) === index,
     );
-  const usersInTeam = users.filter((u) =>
-    isUserInTeam(u, selectedProject?.teamId ?? projectTeamId),
+  const usersInTeam = useMemo(
+    () =>
+      users.filter((u) =>
+        isUserInTeam(u, selectedProject?.teamId ?? projectTeamId),
+      ),
+    [users, selectedProject?.teamId, projectTeamId],
   );
-  const assigneeOptions = dedupeUsers([...projectAssignees, ...usersInTeam]);
+  const assigneeOptions = useMemo(
+    () => dedupeUsers([...projectAssignees, ...usersInTeam]),
+    [projectAssignees, usersInTeam],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -187,15 +194,6 @@ export function TaskFormModal({
       setAssigneeId(assigneeOptions[0]?.id ?? "");
     }
   }, [open, isEdit, assigneeId, assigneeOptions]);
-
-  useEffect(() => {
-    if (!open || !selectedProject) return;
-    const merged = dedupeUsers([
-      ...(selectedProject.members ?? []),
-      ...usersInTeam,
-    ]);
-    setProjectAssignees(merged);
-  }, [open, selectedProject?.id, selectedProject?.teamId, usersInTeam]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
