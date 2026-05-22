@@ -36,7 +36,7 @@ import {
 import { toast } from 'sonner'
 import { api, ApiError } from '@/lib/api/client'
 import { DEFAULT_TEAM_ID } from '@/lib/config'
-import type { Team, User } from '@/lib/types'
+import type { User } from '@/lib/types'
 import { UserPlus, Pencil, Trash2, RefreshCw } from 'lucide-react'
 import { isAdminRole } from '@/lib/roles'
 
@@ -70,7 +70,6 @@ function UsersManagementInner() {
   const { teamId, refreshUser, user: currentUser } = useAuth()
   const showAdminRole = isAdminRole(currentUser?.role)
   const [users, setUsers] = useState<User[]>([])
-  const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
   const [editUser, setEditUser] = useState<User | null>(null)
@@ -79,12 +78,8 @@ function UsersManagementInner() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [list, teamList] = await Promise.all([
-        api.listUsers(),
-        api.listTeams().catch(() => [] as Team[]),
-      ])
+      const list = await api.listUsers()
       setUsers(list)
-      setTeams(teamList)
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : 'Could not load users')
     } finally {
@@ -97,14 +92,9 @@ function UsersManagementInner() {
   }, [load])
 
   function openCreate() {
-    setForm({
-      ...emptyForm(),
-      primaryTeamId: teams[0]?.id ?? DEFAULT_TEAM_ID,
-    })
+    setForm(emptyForm())
     setCreateOpen(true)
   }
-
-  const teamNameById = new Map(teams.map((t) => [t.id, t.name]))
 
   function openEdit(u: User) {
     setEditUser(u)
@@ -222,7 +212,6 @@ function UsersManagementInner() {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>Team</TableHead>
                   <TableHead className="w-[120px]" />
                 </TableRow>
               </TableHeader>
@@ -235,9 +224,6 @@ function UsersManagementInner() {
                       <Badge variant="secondary" className="capitalize">
                         {u.role}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {teamNameById.get(u.teamId) ?? u.teamId}
                     </TableCell>
                     <TableCell className="text-right space-x-1">
                       <Button size="icon" variant="ghost" onClick={() => openEdit(u)}>
@@ -306,13 +292,14 @@ function UsersManagementInner() {
                   </SelectContent>
                 </Select>
               </Field>
-              <TeamSelectField
-                teams={teams}
-                value={form.primaryTeamId}
-                onChange={(primaryTeamId) =>
-                  setForm((f) => ({ ...f, primaryTeamId }))
-                }
-              />
+              <Field label="Primary team id">
+                <Input
+                  value={form.primaryTeamId}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, primaryTeamId: e.target.value }))
+                  }
+                />
+              </Field>
             </div>
             <DialogFooter>
               <Button type="submit">Create</Button>
@@ -371,13 +358,14 @@ function UsersManagementInner() {
                   </SelectContent>
                 </Select>
               </Field>
-              <TeamSelectField
-                teams={teams}
-                value={form.primaryTeamId}
-                onChange={(primaryTeamId) =>
-                  setForm((f) => ({ ...f, primaryTeamId }))
-                }
-              />
+              <Field label="Primary team id">
+                <Input
+                  value={form.primaryTeamId}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, primaryTeamId: e.target.value }))
+                  }
+                />
+              </Field>
               <div className="flex items-center justify-between">
                 <Label htmlFor="active">Active</Label>
                 <Switch
@@ -412,40 +400,5 @@ function Field({
       <Label>{label}</Label>
       {children}
     </div>
-  )
-}
-
-function TeamSelectField({
-  teams,
-  value,
-  onChange,
-}: {
-  teams: Team[]
-  value: string
-  onChange: (teamId: string) => void
-}) {
-  return (
-    <Field label="Team">
-      <Select
-        value={value || undefined}
-        onValueChange={onChange}
-        disabled={teams.length === 0}
-      >
-        <SelectTrigger>
-          <SelectValue
-            placeholder={
-              teams.length === 0 ? 'No teams — create one in Teams' : 'Select team'
-            }
-          />
-        </SelectTrigger>
-        <SelectContent>
-          {teams.map((t) => (
-            <SelectItem key={t.id} value={t.id}>
-              {t.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </Field>
   )
 }
