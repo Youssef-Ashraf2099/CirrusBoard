@@ -1,56 +1,66 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Loader2 } from 'lucide-react'
-import type { Task, User } from '@/lib/types'
-import { api, ApiError } from '@/lib/api/client'
-import { toast } from 'sonner'
+} from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
+import type { Task, User } from "@/lib/types";
+import { api, ApiError } from "@/lib/api/client";
+import { toast } from "sonner";
 
 interface TaskAssignControlProps {
-  task: Task
-  onAssigned: () => void
+  task: Task;
+  onAssigned: () => void;
 }
 
-export function TaskAssignControl({ task, onAssigned }: TaskAssignControlProps) {
-  const [assigneeId, setAssigneeId] = useState(task.assigneeId ?? '')
-  const [assignableUsers, setAssignableUsers] = useState<User[]>([])
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+export function TaskAssignControl({
+  task,
+  onAssigned,
+}: TaskAssignControlProps) {
+  const [assigneeId, setAssigneeId] = useState(task.assigneeId ?? "");
+  const [assignableUsers, setAssignableUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setAssigneeId(task.assigneeId ?? '')
-    setLoading(true)
+    setAssigneeId(task.assigneeId ?? "");
+    setLoading(true);
     void api
       .getProject(task.projectId, true)
-      .then((project) => {
-        setAssignableUsers(
-          (project.members ?? []).filter((u) => u.role === 'employee'),
-        )
+      .then(async (project) => {
+        const teamUsers = await api.listUsers(project.teamId).catch(() => []);
+        const merged = [...(project.members ?? []), ...teamUsers].filter(
+          (u, index, all) =>
+            u.role === "employee" &&
+            all.findIndex((x) => x.id === u.id) === index,
+        );
+        if (task.assignee && !merged.some((u) => u.id === task.assignee.id)) {
+          merged.unshift(task.assignee);
+        }
+        setAssignableUsers(merged);
       })
-      .catch(() => setAssignableUsers([]))
-      .finally(() => setLoading(false))
-  }, [task.projectId, task.assigneeId])
+      .catch(() => setAssignableUsers(task.assignee ? [task.assignee] : []))
+      .finally(() => setLoading(false));
+  }, [task.projectId, task.assigneeId]);
 
   async function onSelectChange(nextId: string) {
-    setAssigneeId(nextId)
-    if (!nextId || nextId === task.assigneeId) return
-    setSaving(true)
+    setAssigneeId(nextId);
+    if (!nextId || nextId === task.assigneeId) return;
+    setSaving(true);
     try {
-      await api.assignTask(task.id, nextId)
-      toast.success('Assignee updated')
-      onAssigned()
+      await api.assignTask(task.id, nextId);
+      toast.success("Assignee updated");
+      onAssigned();
     } catch (e) {
-      setAssigneeId(task.assigneeId ?? '')
-      toast.error(e instanceof ApiError ? e.message : 'Could not assign task')
+      setAssigneeId(task.assigneeId ?? "");
+      toast.error(e instanceof ApiError ? e.message : "Could not assign task");
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
   }
 
@@ -64,7 +74,7 @@ export function TaskAssignControl({ task, onAssigned }: TaskAssignControlProps) 
         {saving || loading ? (
           <span className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            {loading ? 'Loading…' : 'Saving…'}
+            {loading ? "Loading…" : "Saving…"}
           </span>
         ) : (
           <SelectValue placeholder="Unassigned" />
@@ -78,5 +88,5 @@ export function TaskAssignControl({ task, onAssigned }: TaskAssignControlProps) 
         ))}
       </SelectContent>
     </Select>
-  )
+  );
 }
