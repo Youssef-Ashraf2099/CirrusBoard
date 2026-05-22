@@ -85,6 +85,7 @@ const priorityColors: Record<TaskPriority, string> = {
 
 export default function TasksPage() {
   const { teamId, user } = useAuth();
+  const activeTeamId = teamId || user?.teamIds?.[0] || "";
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [members, setMembers] = useState<User[]>([]);
@@ -104,12 +105,20 @@ export default function TasksPage() {
   const canManage = canViewAllTeams;
 
   const reload = useCallback(async () => {
+    if (!canViewAllTeams && !activeTeamId) {
+      setProjects([]);
+      setTasks([]);
+      setMembers([]);
+      setTeamOptions([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const scopeTeam = resolveTaskListTeamId(
         canViewAllTeams,
         viewTeamId,
-        teamId,
+        activeTeamId,
       );
       const projectsPromise = scopeTeam
         ? api.listProjects(scopeTeam)
@@ -141,12 +150,12 @@ export default function TasksPage() {
     } finally {
       setLoading(false);
     }
-  }, [teamId, viewTeamId, canViewAllTeams]);
+  }, [activeTeamId, viewTeamId, canViewAllTeams]);
 
   useEffect(() => {
-    if (!canViewAllTeams) setViewTeamId(teamId);
+    if (!canViewAllTeams) setViewTeamId(activeTeamId);
     else setViewTeamId(ALL_TEAMS_VALUE);
-  }, [teamId, canViewAllTeams]);
+  }, [activeTeamId, canViewAllTeams]);
 
   useEffect(() => {
     void reload();
@@ -235,7 +244,7 @@ export default function TasksPage() {
                 ? viewTeamId === ALL_TEAMS_VALUE
                   ? " · all teams"
                   : ` · team ${viewTeamId}`
-                : ` (${teamId})`}
+                : ` (${activeTeamId})`}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -253,7 +262,7 @@ export default function TasksPage() {
                       </SelectItem>
                     ))
                   ) : (
-                    <SelectItem value={teamId}>{teamId}</SelectItem>
+                    <SelectItem value={activeTeamId}>{activeTeamId}</SelectItem>
                   )}
                 </SelectContent>
               </Select>
@@ -531,7 +540,7 @@ export default function TasksPage() {
           onOpenChange={setTaskFormOpen}
           projects={projects}
           users={usersResolved}
-          teamId={teamId}
+          teamId={activeTeamId}
           task={taskToEdit}
           onSaved={() => void reload()}
           onTaskCreated={(created) => {

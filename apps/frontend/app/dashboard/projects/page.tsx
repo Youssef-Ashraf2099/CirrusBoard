@@ -57,6 +57,7 @@ function progressForProject(projectId: string, tasks: Task[]) {
 
 export default function ProjectsPage() {
   const { teamId, user } = useAuth();
+  const activeTeamId = teamId || user?.teamIds?.[0] || "";
   const canManage = isPrivilegedRole(user?.role);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -67,15 +68,22 @@ export default function ProjectsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [viewTeamId, setViewTeamId] = useState(
-    canManage ? ALL_TEAMS_VALUE : teamId,
+    canManage ? ALL_TEAMS_VALUE : activeTeamId,
   );
   const [teamOptions, setTeamOptions] = useState<
     { id: string; name: string }[]
   >([]);
 
-  const scopeTeamId = canManage ? viewTeamId : teamId;
+  const scopeTeamId = canManage ? viewTeamId : activeTeamId;
 
   const reload = useCallback(async () => {
+    if (!canManage && !activeTeamId) {
+      setProjects([]);
+      setTasks([]);
+      setMembers([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [p, t, u] =
@@ -91,9 +99,9 @@ export default function ProjectsPage() {
               api.listUsers(),
             ])
           : await Promise.all([
-              api.listProjects(scopeTeamId ?? teamId),
-              api.loadTasksWithMeta(scopeTeamId ?? teamId),
-              api.listUsers(scopeTeamId ?? teamId),
+              api.listProjects(scopeTeamId ?? activeTeamId),
+              api.loadTasksWithMeta(scopeTeamId ?? activeTeamId),
+              api.listUsers(scopeTeamId ?? activeTeamId),
             ]);
       setProjects(p);
       setTasks(t);
@@ -108,11 +116,11 @@ export default function ProjectsPage() {
     } finally {
       setLoading(false);
     }
-  }, [scopeTeamId, teamId, canManage, viewTeamId]);
+  }, [scopeTeamId, activeTeamId, canManage, viewTeamId]);
 
   useEffect(() => {
-    if (!canManage) setViewTeamId(teamId);
-  }, [teamId, canManage]);
+    if (!canManage) setViewTeamId(activeTeamId);
+  }, [activeTeamId, canManage]);
 
   useEffect(() => {
     void reload();
@@ -224,7 +232,8 @@ export default function ProjectsPage() {
               No projects yet
             </h3>
             <p className="text-muted-foreground mb-6">
-              Bootstrap your workspace by creating a project for team {teamId}.
+              Bootstrap your workspace by creating a project for team{" "}
+              {activeTeamId}.
             </p>
             {canManage && (
               <Button
@@ -417,7 +426,9 @@ export default function ProjectsPage() {
           open={formOpen}
           onOpenChange={setFormOpen}
           defaultTeamId={
-            viewTeamId === ALL_TEAMS_VALUE ? teamId : scopeTeamId || teamId
+            viewTeamId === ALL_TEAMS_VALUE
+              ? activeTeamId
+              : scopeTeamId || activeTeamId
           }
           project={projectToEdit}
           onSaved={() => void reload()}
