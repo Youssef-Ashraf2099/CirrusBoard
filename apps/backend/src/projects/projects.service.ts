@@ -11,6 +11,7 @@ import { isPrivileged } from "../common/permissions";
 import type { CreateProjectDto } from "./dto/create-project.dto";
 import type { UpdateProjectDto } from "./dto/update-project.dto";
 import { canManageWorkspace, hasTeamAccess } from "../common/auth/cognito-auth.utils";
+import { teamIdsMatch } from "../common/team-id.utils";
 
 @Injectable()
 export class ProjectsService {
@@ -48,7 +49,10 @@ export class ProjectsService {
   ): Promise<ProjectItem> {
     const project = await this.repo.getProjectById(projectId);
     if (!project) throw new NotFoundException("Project not found");
-    if (!isPrivileged(actor.role) && actor.primaryTeamId !== project.teamId)
+    if (
+      !isPrivileged(actor.role) &&
+      !teamIdsMatch(actor.primaryTeamId ?? actor.teamIds?.[0], project.teamId)
+    )
       throw new ForbiddenException("Access denied");
     return project;
   }
@@ -60,7 +64,10 @@ export class ProjectsService {
   ): Promise<ProjectItem> {
     const project = await this.repo.getProjectById(projectId);
     if (!project) throw new NotFoundException("Project not found");
-    if (!isPrivileged(actor.role) && actor.primaryTeamId !== project.teamId)
+    if (
+      !isPrivileged(actor.role) &&
+      !teamIdsMatch(actor.primaryTeamId ?? actor.teamIds?.[0], project.teamId)
+    )
       throw new ForbiddenException("Access denied");
     const payload: Partial<ProjectItem> = {
       ...updates,
@@ -72,7 +79,10 @@ export class ProjectsService {
   async deleteProject(actor: UserItem, projectId: string): Promise<void> {
     const project = await this.repo.getProjectById(projectId);
     if (!project) throw new NotFoundException("Project not found");
-    if (!isPrivileged(actor.role) && actor.primaryTeamId !== project.teamId)
+    if (
+      !isPrivileged(actor.role) &&
+      !teamIdsMatch(actor.primaryTeamId ?? actor.teamIds?.[0], project.teamId)
+    )
       throw new ForbiddenException("Access denied");
     await this.repo.deleteProject(projectId);
   }
@@ -81,7 +91,10 @@ export class ProjectsService {
     actor: UserItem,
     teamId: string,
   ): Promise<ProjectItem[]> {
-    if (!isPrivileged(actor.role) && actor.primaryTeamId !== teamId) {
+    if (
+      !isPrivileged(actor.role) &&
+      !teamIdsMatch(actor.primaryTeamId ?? actor.teamIds?.[0], teamId)
+    ) {
       throw new ForbiddenException("Access denied");
     }
     return this.repo.queryProjectsByTeam(teamId);

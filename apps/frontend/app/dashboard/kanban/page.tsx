@@ -52,7 +52,9 @@ export default function KanbanPage() {
       )
       const [p, t, u] = await Promise.all([
         scopeTeam ? api.listProjects(scopeTeam) : Promise.resolve([]),
-        api.loadTasksWithMeta(scopeTeam),
+        api.loadTasksWithMeta(scopeTeam, {
+          employeeScope: !canViewAllTeams,
+        }),
         scopeTeam ? api.listUsers(scopeTeam) : api.listUsers(),
       ])
       setProjects(p)
