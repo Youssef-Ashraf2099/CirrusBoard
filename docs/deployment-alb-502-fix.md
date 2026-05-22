@@ -6,6 +6,22 @@
 
 That means the load balancer could not get a valid response from the **target group** for that request — not a Nest validation error.
 
+Quick diagnosis (from any machine):
+
+```bash
+ALB=http://cirrusboard-alb-1287657747.eu-north-1.elb.amazonaws.com
+curl -sS -o /dev/null -w "GET /     → %{http_code}\n" "$ALB/"
+curl -sS -o /dev/null -w "GET /api/health → %{http_code}\n" "$ALB/api/health"
+curl -sS -o /dev/null -w "POST /api/users/login → %{http_code}\n" \
+  -X POST "$ALB/api/users/login" -H 'Content-Type: application/json' \
+  -d '{"email":"a@b.com","password":"x"}'
+```
+
+| `/` | `/api/*` | Meaning |
+|-----|----------|---------|
+| 200 | **502** | ALB still sends `/api/*` to the **backend** target group (broken). Fix routing below. |
+| 200 | 200 or 401 | Routing OK; Nest/Next responding. |
+
 ## Root cause (this repo’s default CloudFormation)
 
 `infrastructure/vpc-alb-asg.yaml` used to send **`/api/*` to the backend Auto Scaling group** while many deployments only run **Next.js on the frontend EC2** (with Nest on the same host via `BACKEND_URL=127.0.0.1:3001`).
@@ -24,20 +40,44 @@ Backend ASG instances often still run the **placeholder** `server.js` from UserD
 
 ### Recommended: Next.js + Nest on the **frontend EC2** (same box)
 
-1. **Redeploy or update the stack** with `ApiRoutingMode=frontend` (default), **or** delete the listener rule that forwards `/api/*` to the backend target group in the AWS console.
-2. On the **frontend** instance (SSM session):
+1. **Redeploy or update the stack** with `ApiRoutingMode=frontend` (default), **or** delete the listener rule that forwards `/api/*` to the backend target group.
+
+   **Console:** EC2 → Load Balancers → your ALB → **Listeners** → HTTP:80 → **Rules** → delete the rule with path `/api/*` forwarding to `cirrusboard-backend-tg`.
+
+   **CLI** (if `aws` is installed):
 
    ```bash
-   cd /app/apps/backend   # or /appBack/apps/backend
-   npm ci
-   npm run build
-   PORT=3001 node dist/main.js &   # or pm2 start ecosystem.config.js
+   export AWS_REGION=eu-north-1
+   chmod +x infrastructure/scripts/fix-alb-api-routing.sh
+   ./infrastructure/scripts/fix-alb-api-routing.sh cirrusboard-alb
+   ```
 
-   cd /app/apps/frontend
+   **CloudFormation update** (keeps stack in sync):
+
+   ```bash
+   aws cloudformation update-stack \
+     --stack-name <your-stack-name> \
+     --use-previous-template \
+     --parameters ParameterKey=ApiRoutingMode,ParameterValue=frontend \
+     --capabilities CAPABILITY_NAMED_IAM
+   ```
+2. On the **frontend** instance (SSM session), deploy real apps (not the UserData placeholder):
+
+   ```bash
+   git clone <your-repo-url> /app/CirrusBoard   # if not already there
+   chmod +x /app/CirrusBoard/infrastructure/scripts/deploy-on-frontend-ec2.sh
+   /app/CirrusBoard/infrastructure/scripts/deploy-on-frontend-ec2.sh
+   ```
+
+   Or manually:
+
+   ```bash
+   cd /app/CirrusBoard/apps/backend
+   npm ci && npm run build && PORT=3001 node dist/main.js &
+
+   cd /app/CirrusBoard/apps/frontend
    echo 'BACKEND_URL=http://127.0.0.1:3001' > .env.production.local
-   npm ci
-   npm run build
-   PORT=3000 npm run start &
+   npm ci && npm run build && PORT=3000 npm run start &
    ```
 
 3. Confirm locally on the instance:
