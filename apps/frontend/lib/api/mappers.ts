@@ -193,7 +193,7 @@ export function mapUiRoleToApi(role: UserRole): ApiUser["role"] {
 }
 
 export function mapApiUserToUser(u: ApiUser): User {
-  const teamId = u.primaryTeamId ?? u.teamIds?.[0] ?? DEFAULT_TEAM_ID;
+  const teamId = u.primaryTeamId ?? u.teamIds?.[0] ?? "";
   return {
     id: u.userId,
     name: u.name,
