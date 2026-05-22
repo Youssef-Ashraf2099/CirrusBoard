@@ -75,9 +75,7 @@ export default function DashboardPage() {
       const activityTeam = scopeTeam ?? teamId
       const [p, t, u, a] = await Promise.all([
         scopeTeam ? api.listProjects(scopeTeam) : Promise.resolve([]),
-        api.loadTasksWithMeta(scopeTeam, {
-          employeeScope: !canViewAllTeams,
-        }),
+        api.loadTasksWithMeta(scopeTeam),
         scopeTeam ? api.listUsers(scopeTeam) : api.listUsers(),
         api.listActivity(activityTeam, 10).catch((err) => {
           console.error(

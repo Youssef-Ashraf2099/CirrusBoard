@@ -883,13 +883,8 @@ export const api = {
     );
   },
 
-  async loadTasksWithMeta(
-    teamId?: string,
-    options?: { employeeScope?: boolean },
-  ): Promise<Task[]> {
-    const raw = options?.employeeScope
-      ? await this.listTasks()
-      : await this.listTasks(teamId);
+  async loadTasksWithMeta(teamId?: string): Promise<Task[]> {
+    const raw = await this.listTasks(teamId);
     return this.hydrateTasks(raw, teamId);
   },
 };

@@ -1,5 +1,4 @@
-import { Injectable, Inject, Logger } from "@nestjs/common";
-import { normalizeTeamId } from "../common/team-id.utils";
+import { Injectable, Inject } from "@nestjs/common";
 import {
   DynamoDBDocumentClient,
   PutCommand,
@@ -18,8 +17,6 @@ import {
 
 @Injectable()
 export class UsersRepository {
-  private readonly logger = new Logger(UsersRepository.name);
-
   constructor(
     @Inject("DYNAMO_CLIENT") private readonly client: DynamoDBDocumentClient,
     @Inject("USERS_TABLE") private readonly tableName: string,
@@ -172,32 +169,17 @@ export class UsersRepository {
 
   async queryUsersByTeam(
     teamId: string,
-    indexName = process.env.USERS_TEAM_GSI || "primaryTeamId-index",
+    indexName = "primaryTeamId-index",
   ): Promise<UserItem[]> {
-    const normalized = normalizeTeamId(teamId);
-    try {
-      const res = await this.client.send(
-        new QueryCommand({
-          TableName: this.tableName,
-          IndexName: indexName,
-          KeyConditionExpression: "#primaryTeamId = :teamId",
-          ExpressionAttributeNames: { "#primaryTeamId": "primaryTeamId" },
-          ExpressionAttributeValues: { ":teamId": teamId },
-        }) as any,
-      );
-      const items = ((res as any).Items ?? []) as UserItem[];
-      if (items.length > 0) return items;
-    } catch (err) {
-      this.logger.warn(
-        `Users team GSI query failed (${indexName}), falling back to scan: ${
-          err instanceof Error ? err.message : err
-        }`,
-      );
-    }
-
-    const all = await this.scanUsers(500);
-    return all.filter(
-      (u) => normalizeTeamId(u.primaryTeamId) === normalized,
+    const res = await this.client.send(
+      new QueryCommand({
+        TableName: this.tableName,
+        IndexName: indexName,
+        KeyConditionExpression: "#primaryTeamId = :teamId",
+        ExpressionAttributeNames: { "#primaryTeamId": "primaryTeamId" },
+        ExpressionAttributeValues: { ":teamId": teamId },
+      }) as any,
     );
+    return (res as any).Items ?? [];
   }
 }

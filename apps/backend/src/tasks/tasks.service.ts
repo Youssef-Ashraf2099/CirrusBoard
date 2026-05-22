@@ -9,10 +9,6 @@ import { TaskItem, Attachment } from "./tasks.model";
 import { UserItem } from "../users/users.model";
 import { UsersRepository } from "../users/users.repository";
 import { assertCanReadTask } from "./task-access";
-import {
-  normalizeTeamId,
-  teamIdsMatch,
-} from "../common/team-id.utils";
 import { v4 as uuidv4 } from "uuid";
 import { CreateTaskDto } from "./dto/create-task.dto";
 import { UpdateTaskDto } from "./dto/update-task.dto";
@@ -34,6 +30,10 @@ export class TasksService {
     private readonly auditLogs?: AuditLogsService,
   ) {}
 
+  private normalizeTeamId(teamId: string): string {
+    return teamId.replace(/^TEAM#/, "");
+  }
+
   private async resolveUser(userId: string): Promise<UserItem | null> {
     const direct = await this.usersRepo.getUserById(userId);
     if (direct) return direct;
@@ -51,7 +51,9 @@ export class TasksService {
     if (!assignee) {
       throw new NotFoundException("Assignee not found");
     }
-    if (!teamIdsMatch(teamId, assignee.primaryTeamId)) {
+    const taskTeam = this.normalizeTeamId(teamId);
+    const userTeam = this.normalizeTeamId(assignee.primaryTeamId ?? "");
+    if (userTeam !== taskTeam) {
       throw new BadRequestException(
         "Assignee must belong to the selected task team",
       );
@@ -172,22 +174,11 @@ export class TasksService {
       }
       return this.repo.listAllTasks();
     }
-    const actorTeam = normalizeTeamId(
-      actor.primaryTeamId ?? actor.teamIds?.[0],
-    );
-    if (
-      teamId &&
-      actorTeam &&
-      !teamIdsMatch(teamId, actor.primaryTeamId ?? actor.teamIds?.[0])
-    ) {
+    if (teamId && teamId !== actor.primaryTeamId) {
       throw new ForbiddenException("Access denied to team tasks");
     }
-    const assigned = await this.repo.queryTasksByAssigneeId(
-      actor.userId,
-      actorTeam || normalizeTeamId(teamId),
-    );
-    if (!actorTeam) return assigned;
-    return assigned.filter((t) => teamIdsMatch(t.teamId, actorTeam));
+    const assigned = await this.repo.queryTasksByAssigneeId(actor.userId);
+    return assigned.filter((t) => t.teamId === actor.primaryTeamId);
   }
 
   async updateStatus(

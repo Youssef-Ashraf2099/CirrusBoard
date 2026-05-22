@@ -123,14 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const parsed = JSON.parse(raw) as User;
         setUser(parsed);
-        try {
-          const fresh = await api.getUser(parsed.id);
-          setUser(fresh);
-          setStoredUser(fresh);
-        } catch {
-          // Keep cached profile if refresh fails (e.g. transient 500)
-          setUser(parsed);
-        }
+        const fresh = await api.getUser(parsed.id);
+        setUser(fresh);
+        setStoredUser(fresh);
       } catch {
         localStorage.removeItem(STORAGE_KEY);
         clearTokens();
