@@ -39,6 +39,18 @@ Parameters:
   AmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+  ApiRoutingMode:
+    Type: String
+    Default: frontend
+    AllowedValues:
+      - frontend
+      - backend
+    Description: >
+      frontend (recommended): ALB sends all traffic to Next.js; /api is proxied
+      to Nest via BACKEND_URL. backend: ALB sends /api/* directly to the Nest ASG.
+
+Conditions:
+  RouteApiToBackend: !Equals [!Ref ApiRoutingMode, backend]
 
 Resources:
 
@@ -255,6 +267,10 @@ Resources:
           FromPort: !Ref BackendPort
           ToPort: !Ref BackendPort
           SourceSecurityGroupId: !Ref AlbSecurityGroup
+        - IpProtocol: tcp
+          FromPort: !Ref BackendPort
+          ToPort: !Ref BackendPort
+          SourceSecurityGroupId: !Ref FrontendSecurityGroup
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -337,9 +353,10 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref FrontendTargetGroup
 
-  # /api/* routes to backend
+  # Optional: /api/* straight to Nest ASG (only when ApiRoutingMode=backend)
   AlbApiListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Condition: RouteApiToBackend
     Properties:
       ListenerArn: !Ref AlbListener
       Priority: 10

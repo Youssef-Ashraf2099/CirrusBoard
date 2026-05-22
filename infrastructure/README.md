@@ -5,7 +5,8 @@ This folder contains separated SAM templates by responsibility:
 - `s3-lambda-sam.yaml` for S3 uploads -> image-resize Lambda
 - `messaging-worker-sam.yaml` for SNS/SQS task assignment worker
 - `frontend-cdn-sam.yaml` for CloudFront CDN in front of the Next.js origin
-- `vpc-alb-asg.yaml` for VPC + public/private subnets + NAT + ALB + EC2 ASG
+- `vpc-alb-asg.yaml` for VPC + public/private subnets + NAT + ALB + EC2 ASG  
+  **Default `ApiRoutingMode=frontend`**: all HTTP goes to Next.js; `/api/*` is proxied to Nest via `BACKEND_URL`. See `docs/deployment-alb-502-fix.md` if login returns **502**.
 - `dynamodb-tables.yaml` for DynamoDB tables (Users, Teams, Projects, Tasks, Comments, TaskAuditLogs)
 
 ## Prerequisites
