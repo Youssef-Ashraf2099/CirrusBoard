@@ -1,8 +1,7 @@
-import { Module, forwardRef } from "@nestjs/common";
+import { Module } from "@nestjs/common";
 import { UsersService } from "./users.service";
 import { UsersController } from "./users.controller";
 import { UsersRepository } from "./users.repository";
-import { TeamsModule } from "../teams/teams.module";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { createSharedDynamoDBClient } from "../common/dynamo-client.factory";
 
@@ -18,7 +17,6 @@ const tableNameProvider = {
 };
 
 @Module({
-  imports: [forwardRef(() => TeamsModule)],
   controllers: [UsersController],
   providers: [
     dynamoClientProvider,
