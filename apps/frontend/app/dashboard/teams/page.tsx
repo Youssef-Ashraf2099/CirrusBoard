@@ -317,6 +317,10 @@ function TeamFormDialog({
   users: User[];
   onSubmit: (e: React.FormEvent) => void;
 }) {
+  const managerOptions = users.filter(
+    (u) => u.role === "manager" || u.role === "admin",
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
