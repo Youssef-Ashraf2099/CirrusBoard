@@ -4,13 +4,16 @@ import { UserItem } from "../../users/users.model";
 import { SnsService } from "../../integrations/sns/sns.service";
 import { UsersRepository } from "../../users/users.repository";
 import { NotificationsService } from "../../notifications/notifications.service";
+import { ProjectsRepository } from "../../projects/projects.repository";
 
 describe("TasksService", () => {
   let service: TasksService;
   let repo: Partial<TasksRepository>;
+  let projectsRepo: Partial<ProjectsRepository>;
   let usersRepo: Partial<UsersRepository>;
   let sns: Partial<SnsService>;
   let notifications: Partial<NotificationsService>;
+  let cloudwatchSend: jest.Mock;
 
   beforeEach(() => {
     repo = {
@@ -20,6 +23,7 @@ describe("TasksService", () => {
       deleteTask: jest.fn(),
       queryTasksByTeamId: jest.fn(),
       queryTasksByAssigneeId: jest.fn(),
+      queryTasksByDeadline: jest.fn(),
       listAllTasks: jest.fn(),
     };
     usersRepo = {
@@ -27,6 +31,9 @@ describe("TasksService", () => {
         userId: "sara",
         primaryTeamId: "team-a",
       }),
+    };
+    projectsRepo = {
+      getProjectById: jest.fn(),
     };
     sns = {
       publishTaskAssigned: jest.fn(),
@@ -37,18 +44,29 @@ describe("TasksService", () => {
     service = new TasksService(
       repo as TasksRepository,
       usersRepo as UsersRepository,
+      projectsRepo as ProjectsRepository,
       undefined,
       undefined,
       sns as any,
       notifications as any,
     );
+    cloudwatchSend = jest.fn().mockResolvedValue({});
+    (service as any).cloudwatchClient = {
+      send: cloudwatchSend,
+    };
   });
 
   it("allows manager to create task", async () => {
     const actor: UserItem = { userId: "ali", role: "MANAGER" } as any;
+    (projectsRepo.getProjectById as jest.Mock).mockResolvedValue({
+      projectId: "p1",
+      memberUserIds: ["u2"],
+    });
     (repo.createTask as jest.Mock).mockResolvedValue({
       taskId: "1",
+      projectId: "p1",
       title: "x",
+      teamId: "team-a",
     } as any);
     const t = await service.createTask(actor, {
       title: "x",
@@ -56,6 +74,19 @@ describe("TasksService", () => {
     } as any);
     expect(repo.createTask).toHaveBeenCalled();
     expect(t.taskId).toBe("1");
+    expect(cloudwatchSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          Namespace: "CirrusBoard",
+          MetricData: [
+            expect.objectContaining({
+              MetricName: "TasksCreated",
+              Value: 1,
+            }),
+          ],
+        }),
+      }),
+    );
   });
 
   it("prevents employee from creating task", async () => {
@@ -87,6 +118,89 @@ describe("TasksService", () => {
     const updated = await service.updateStatus(actor, "1", "IN_PROGRESS");
     expect(repo.updateTask).toHaveBeenCalled();
     expect(updated.status).toBe("IN_PROGRESS");
+  });
+
+  it("publishes close metrics when a task reaches done", async () => {
+    const actor: UserItem = {
+      userId: "sara",
+      role: "EMPLOYEE",
+      primaryTeamId: "team-a",
+    } as any;
+    (repo.getTaskById as jest.Mock).mockResolvedValue({
+      taskId: "1",
+      assigneeId: "sara",
+      teamId: "team-a",
+      status: "IN_PROGRESS",
+      createdAt: "2026-05-22T00:00:00.000Z",
+    } as any);
+    (repo.updateTask as jest.Mock).mockResolvedValue({
+      taskId: "1",
+      status: "DONE",
+      teamId: "team-a",
+      createdAt: "2026-05-22T00:00:00.000Z",
+    } as any);
+
+    await service.updateStatus(actor, "1", "DONE");
+
+    expect(cloudwatchSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          Namespace: "CirrusBoard",
+          MetricData: [
+            expect.objectContaining({
+              MetricName: "TasksClosed",
+              Value: 1,
+            }),
+          ],
+        }),
+      }),
+    );
+    expect(cloudwatchSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          Namespace: "CirrusBoard",
+          MetricData: [
+            expect.objectContaining({
+              MetricName: "TimeToClose",
+              Unit: "Hours",
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
+  it("counts overdue tasks and publishes the overdue metric", async () => {
+    (repo.queryTasksByDeadline as jest.Mock).mockResolvedValue([
+      { taskId: "1", deadline: "2026-05-20", status: "IN_PROGRESS" },
+      { taskId: "2", deadline: "2026-05-21", status: "DONE" },
+      { taskId: "3", deadline: "2026-05-21", status: "TODO" },
+    ]);
+
+    const originalToISOString = Date.prototype.toISOString;
+    Date.prototype.toISOString = jest.fn(
+      () => "2026-05-22T10:00:00.000Z",
+    ) as any;
+
+    const overdueCount = await service.checkOverdueTasks();
+
+    Date.prototype.toISOString = originalToISOString;
+
+    expect(overdueCount).toBe(2);
+    expect(cloudwatchSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          Namespace: "CirrusBoard",
+          MetricData: [
+            expect.objectContaining({
+              MetricName: "OverdueTasks",
+              Value: 2,
+              Unit: "Count",
+            }),
+          ],
+        }),
+      }),
+    );
   });
 
   it("prevents employee from updating others task", async () => {
@@ -144,8 +258,13 @@ describe("TasksService", () => {
 
   it("publishes task assignment event", async () => {
     const actor: UserItem = { userId: "ali", role: "MANAGER" } as any;
+    (projectsRepo.getProjectById as jest.Mock).mockResolvedValue({
+      projectId: "p1",
+      memberUserIds: ["u2"],
+    });
     (repo.getTaskById as jest.Mock).mockResolvedValue({
       taskId: "1",
+      projectId: "p1",
       teamId: "team-a",
     } as any);
     (usersRepo.getUserById as jest.Mock).mockResolvedValue({
