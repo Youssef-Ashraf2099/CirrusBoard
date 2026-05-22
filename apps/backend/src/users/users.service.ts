@@ -117,6 +117,11 @@ export class UsersService {
               Protocol: "email",
               TopicArn: topicArn,
               Endpoint: plainEmail,
+              Attributes: {
+                FilterPolicy: JSON.stringify({
+                  assigneeEmail: [plainEmail],
+                }),
+              },
             }),
           )
           .then(() => {
