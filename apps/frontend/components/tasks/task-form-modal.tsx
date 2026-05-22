@@ -77,11 +77,14 @@ export function TaskFormModal({
 
   const isEdit = !!task;
   const selectedProject = projects.find((p) => p.id === projectId);
+  const dedupeUsers = (items: User[]) =>
+    items.filter(
+      (user, index, all) => all.findIndex((x) => x.id === user.id) === index,
+    );
   const usersInTeam = users.filter((u) =>
     isUserInTeam(u, selectedProject?.teamId ?? projectTeamId),
   );
-  const assigneeOptions =
-    projectAssignees.length > 0 ? projectAssignees : usersInTeam;
+  const assigneeOptions = dedupeUsers([...projectAssignees, ...usersInTeam]);
 
   useEffect(() => {
     if (!open) return;
@@ -184,6 +187,15 @@ export function TaskFormModal({
       setAssigneeId(assigneeOptions[0]?.id ?? "");
     }
   }, [open, isEdit, assigneeId, assigneeOptions]);
+
+  useEffect(() => {
+    if (!open || !selectedProject) return;
+    const merged = dedupeUsers([
+      ...(selectedProject.members ?? []),
+      ...usersInTeam,
+    ]);
+    setProjectAssignees(merged);
+  }, [open, selectedProject?.id, selectedProject?.teamId, usersInTeam]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
