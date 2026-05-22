@@ -55,6 +55,23 @@ export class UsersService {
     private readonly teams: TeamsService,
   ) {}
 
+  private async enrichMemberships(user: UserItem): Promise<UserItem> {
+    const teams = await this.teams.findTeamsForUser(user.userId);
+    const teamIds = new Set<string>(
+      [
+        ...(user.teamIds ?? []),
+        ...teams.map((team) => team.teamId),
+        ...(user.primaryTeamId ? [user.primaryTeamId] : []),
+      ].filter(Boolean),
+    );
+    const primaryTeamId = user.primaryTeamId ?? teams[0]?.teamId;
+    return {
+      ...user,
+      primaryTeamId,
+      teamIds: [...teamIds],
+    };
+  }
+
   async createUser(input: Partial<UserItem>): Promise<PublicUser> {
     try {
       const plainPassword = input.password; // capture before anything touches it
@@ -80,7 +97,7 @@ export class UsersService {
         });
       }
 
-      return sanitizeUser(created);
+      return sanitizeUser(await this.enrichMemberships(created));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`createUser failed: ${msg}`);
@@ -122,11 +139,12 @@ export class UsersService {
   async getUser(userId: string): Promise<PublicUser> {
     const u = await this.repo.getUserById(userId);
     if (!u) throw new NotFoundException("User not found");
-    return sanitizeUser(u);
+    return sanitizeUser(await this.enrichMemberships(u));
   }
 
   async syncFromCognitoClaims(claims: CognitoClaims): Promise<UserItem> {
-    return this.repo.upsertFromCognitoClaims(claims);
+    const synced = await this.repo.upsertFromCognitoClaims(claims);
+    return this.enrichMemberships(synced);
   }
 
   async findByCognitoSub(cognitoSub: string): Promise<UserItem | null> {
@@ -171,7 +189,7 @@ export class UsersService {
         });
     }
 
-    return sanitizeUser(updated);
+    return sanitizeUser(await this.enrichMemberships(updated));
   }
 
   async deleteUser(userId: string): Promise<void> {
@@ -201,7 +219,7 @@ export class UsersService {
     if (u.isActive === false) {
       throw new UnauthorizedException("Account disabled");
     }
-    return sanitizeUser(u);
+    return sanitizeUser(await this.enrichMemberships(u));
   }
 
   async login(email: string, password: string): Promise<LoginResponse> {
@@ -210,7 +228,10 @@ export class UsersService {
         const tokens = await this.authenticateWithCognito(email, password);
         const claims = decodeJwtPayload(tokens.idToken);
         const synced = await this.syncFromCognitoClaims(claims);
-        return { user: sanitizeUser(synced), tokens };
+        return {
+          user: sanitizeUser(await this.enrichMemberships(synced)),
+          tokens,
+        };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         this.logger.warn(`Cognito login failed, falling back to local: ${msg}`);
@@ -218,7 +239,7 @@ export class UsersService {
     }
 
     const user = await this.validateLogin(email, password);
-    return { user };
+    return { user: sanitizeUser(await this.enrichMemberships(user)) };
   }
 
   async refreshSession(
@@ -260,7 +281,7 @@ export class UsersService {
     const synced = await this.syncFromCognitoClaims(claims);
 
     return {
-      user: sanitizeUser(synced),
+      user: sanitizeUser(await this.enrichMemberships(synced)),
       tokens: {
         accessToken: result.AccessToken,
         idToken: result.IdToken,

@@ -58,6 +58,11 @@ export class TeamsService {
     return Promise.all(filtered.map((t) => this.expandMembers(actor, t, true)));
   }
 
+  async findTeamsForUser(userId: string): Promise<TeamItem[]> {
+    const all = await this.repo.scanAll();
+    return all.filter((team) => (team.memberUserIds ?? []).includes(userId));
+  }
+
   async findOne(
     actor: UserItem,
     id: string,
