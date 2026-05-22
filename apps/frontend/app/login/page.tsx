@@ -1,36 +1,46 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { motion } from 'framer-motion'
-import Link from 'next/link'
-import dynamic from 'next/dynamic'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
-import { Zap, Mail, Lock, ArrowRight, Github, Chrome } from 'lucide-react'
-import { useAuth } from '@/lib/auth-context'
-import { toast } from 'sonner'
+import { useState } from "react";
+import { motion } from "framer-motion";
+import Link from "next/link";
+import dynamic from "next/dynamic";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Zap, Mail, Lock, ArrowRight, Github, Chrome } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
+import { ApiError } from "@/lib/api/client";
+import { toast } from "sonner";
 
 const Background3D = dynamic(
-  () =>
-    import('@/components/3d/background-3d').then((mod) => mod.Background3D),
+  () => import("@/components/3d/background-3d").then((mod) => mod.Background3D),
   { ssr: false },
-)
+);
 
 export default function LoginPage() {
-  const { login, isLoading } = useAuth()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const { login, isLoading } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+    e.preventDefault();
     try {
-      await login(email, password)
-      toast.success('Signed in')
-    } catch {
-      toast.error('Invalid credentials')
+      await login(email, password);
+      toast.success("Signed in");
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : "Unable to sign in. Check the backend connection or try again.",
+      );
     }
   }
 
@@ -59,7 +69,8 @@ export default function LoginPage() {
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Welcome back</CardTitle>
             <CardDescription>
-              Uses CirrusBoard `POST /api/users/login` via Next proxy — create an account first if Dynamo is empty.
+              Uses CirrusBoard POST /api/users/login via the Next proxy. If
+              login fails, the page now shows the real backend error.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -106,12 +117,20 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full gap-2" disabled={isLoading}>
+              <Button
+                type="submit"
+                className="w-full gap-2"
+                disabled={isLoading}
+              >
                 {isLoading ? (
                   <motion.div
                     className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full"
                     animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    transition={{
+                      duration: 1,
+                      repeat: Infinity,
+                      ease: "linear",
+                    }}
                   />
                 ) : (
                   <>
@@ -130,19 +149,32 @@ export default function LoginPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <Button variant="outline" className="gap-2" type="button" disabled>
+              <Button
+                variant="outline"
+                className="gap-2"
+                type="button"
+                disabled
+              >
                 <Github className="w-4 h-4" />
                 GitHub
               </Button>
-              <Button variant="outline" className="gap-2" type="button" disabled>
+              <Button
+                variant="outline"
+                className="gap-2"
+                type="button"
+                disabled
+              >
                 <Chrome className="w-4 h-4" />
                 Google
               </Button>
             </div>
 
             <p className="text-center text-sm text-muted-foreground mt-6">
-              Don&apos;t have an account?{' '}
-              <Link href="/signup" className="text-primary hover:underline font-medium">
+              Don&apos;t have an account?{" "}
+              <Link
+                href="/signup"
+                className="text-primary hover:underline font-medium"
+              >
                 Sign up
               </Link>
             </p>
@@ -150,12 +182,12 @@ export default function LoginPage() {
         </Card>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          Backend must run on{' '}
+          Backend must run on{" "}
           <code className="text-[11px] bg-muted px-1 rounded">
             BACKEND_URL (see .env.example)
           </code>
         </p>
       </motion.div>
     </div>
-  )
+  );
 }
