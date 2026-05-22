@@ -107,6 +107,12 @@ export class TasksService {
           [{ Name: "Team", Value: teamValue }],
           "Hours",
         );
+        await this.sendMetric(
+          "AverageTimeToClose",
+          hoursToClose,
+          [{ Name: "Team", Value: teamValue }],
+          "Hours",
+        );
       }
     }
   }
