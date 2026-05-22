@@ -32,6 +32,6 @@ aws ssm start-session --target i-0f4fde6edb87bbbfe --region eu-north-1
 
 cd /app/apps/frontend  #useed one
 /appBack/apps/frontend/
-/appBack/apps/backend/  #used one
+cd /appBack/apps/backend/  #used one
 /tmp/lambda-resize
 
