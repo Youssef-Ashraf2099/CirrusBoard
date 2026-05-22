@@ -152,4 +152,23 @@ export class ProjectsRepository {
       (p) => normalizeTeamId(p.teamId) === normalized,
     );
   }
+
+  /** Manager company-wide listing (demo-scale scan). */
+  async listAllProjects(limit = 300): Promise<ProjectItem[]> {
+    const items: ProjectItem[] = [];
+    let lastKey: Record<string, unknown> | undefined;
+    do {
+      const res = await this.client.send(
+        new ScanCommand({
+          TableName: this.tableName,
+          ExclusiveStartKey: lastKey,
+          Limit: Math.min(limit - items.length, 100),
+        }) as any,
+      );
+      const batch = ((res as any).Items ?? []) as ProjectItem[];
+      items.push(...batch);
+      lastKey = (res as any).LastEvaluatedKey;
+    } while (lastKey && items.length < limit);
+    return items;
+  }
 }

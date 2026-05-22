@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
@@ -31,11 +32,21 @@ export class ProjectsController {
     );
   }
 
+  @Get()
+  @ApiOperation({
+    summary:
+      "List projects (employees: own team only; managers: all or ?teamId=)",
+  })
+  list(@User() user: any, @Query("teamId") teamId?: string) {
+    if (!user) throw new UnauthorizedException("Authentication required");
+    return this.projectsService.listProjects(user as UserItem, teamId);
+  }
+
   @Get("team/:teamId")
-  @ApiOperation({ summary: "List projects for a team" })
+  @ApiOperation({ summary: "List projects for a team (legacy path)" })
   listForTeam(@User() user: any, @Param("teamId") teamId: string) {
     if (!user) throw new UnauthorizedException("Authentication required");
-    return this.projectsService.listProjectsForTeam(user as UserItem, teamId);
+    return this.projectsService.listProjects(user as UserItem, teamId);
   }
 
   @Get(":id")
