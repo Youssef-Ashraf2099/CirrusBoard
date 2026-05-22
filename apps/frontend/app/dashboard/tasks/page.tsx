@@ -42,6 +42,10 @@ import { api, ApiError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
 import { isPrivilegedRole } from '@/lib/roles'
+import {
+  ALL_TEAMS_VALUE,
+  resolveTaskListTeamId,
+} from '@/lib/task-list-scope'
 
 const statusConfig: Record<TaskStatus, { label: string; icon: React.ReactNode; color: string }> = {
   todo: { label: 'To Do', icon: <Circle className="w-4 h-4" />, color: 'text-blue-500' },
@@ -70,18 +74,23 @@ export default function TasksPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
-  const [viewTeamId, setViewTeamId] = useState(teamId)
+  const [viewTeamId, setViewTeamId] = useState(ALL_TEAMS_VALUE)
   const [teamOptions, setTeamOptions] = useState<{ id: string; name: string }[]>([])
   const canViewAllTeams = isPrivilegedRole(user?.role)
+  const canManage = canViewAllTeams
 
   const reload = useCallback(async () => {
     setLoading(true)
     try {
-      const scopeTeam = canViewAllTeams ? viewTeamId : teamId
+      const scopeTeam = resolveTaskListTeamId(
+        canViewAllTeams,
+        viewTeamId,
+        teamId,
+      )
       const [p, tRaw, mu] = await Promise.all([
-        api.listProjects(scopeTeam),
+        scopeTeam ? api.listProjects(scopeTeam) : Promise.resolve([]),
         api.loadTasksWithMeta(scopeTeam),
-        api.listUsers(scopeTeam),
+        scopeTeam ? api.listUsers(scopeTeam) : api.listUsers(),
       ])
       setProjects(p)
       setTasks(tRaw)
@@ -99,8 +108,9 @@ export default function TasksPage() {
   }, [teamId, viewTeamId, canViewAllTeams])
 
   useEffect(() => {
-    setViewTeamId(teamId)
-  }, [teamId])
+    if (!canViewAllTeams) setViewTeamId(teamId)
+    else setViewTeamId(ALL_TEAMS_VALUE)
+  }, [teamId, canViewAllTeams])
 
   useEffect(() => {
     void reload()
@@ -183,7 +193,11 @@ export default function TasksPage() {
             <h1 className="text-2xl font-bold text-foreground">Tasks</h1>
             <p className="text-muted-foreground">
               Live data from the CirrusBoard API
-              {canViewAllTeams ? ` · team ${viewTeamId}` : ` (${teamId})`}
+              {canViewAllTeams
+                ? viewTeamId === ALL_TEAMS_VALUE
+                  ? ' · all teams'
+                  : ` · team ${viewTeamId}`
+                : ` (${teamId})`}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -193,6 +207,7 @@ export default function TasksPage() {
                   <SelectValue placeholder="Team" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={ALL_TEAMS_VALUE}>All Teams</SelectItem>
                   {teamOptions.length > 0 ? (
                     teamOptions.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
@@ -200,7 +215,7 @@ export default function TasksPage() {
                       </SelectItem>
                     ))
                   ) : (
-                    <SelectItem value={viewTeamId}>{viewTeamId}</SelectItem>
+                    <SelectItem value={teamId}>{teamId}</SelectItem>
                   )}
                 </SelectContent>
               </Select>
@@ -238,16 +253,27 @@ export default function TasksPage() {
                 <SelectItem value="urgent">Urgent</SelectItem>
               </SelectContent>
             </Select>
-            <Button
-              className="gap-2"
-              onClick={() => {
-                setTaskToEdit(null)
-                setTaskFormOpen(true)
-              }}
-            >
-              <Plus className="w-4 h-4" />
-              New Task
-            </Button>
+            {canManage && (
+              <Button
+                className="gap-2"
+                disabled={
+                  canViewAllTeams &&
+                  viewTeamId === ALL_TEAMS_VALUE
+                }
+                title={
+                  canViewAllTeams && viewTeamId === ALL_TEAMS_VALUE
+                    ? 'Select a team to create a task'
+                    : undefined
+                }
+                onClick={() => {
+                  setTaskToEdit(null)
+                  setTaskFormOpen(true)
+                }}
+              >
+                <Plus className="w-4 h-4" />
+                New Task
+              </Button>
+            )}
           </div>
         </div>
 
@@ -295,16 +321,21 @@ export default function TasksPage() {
                     ? 'Create your first task or invite teammates once users exist in the backend.'
                     : 'Nothing matches these filters.'}
                 </p>
-                <Button
-                  className="gap-2"
-                  onClick={() => {
-                    setTaskToEdit(null)
-                    setTaskFormOpen(true)
-                  }}
-                >
-                  <Plus className="w-4 h-4" />
-                  Create Task
-                </Button>
+                {canManage && (
+                  <Button
+                    className="gap-2"
+                    disabled={
+                      canViewAllTeams && viewTeamId === ALL_TEAMS_VALUE
+                    }
+                    onClick={() => {
+                      setTaskToEdit(null)
+                      setTaskFormOpen(true)
+                    }}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Create Task
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="divide-y divide-border/50">
@@ -336,37 +367,39 @@ export default function TasksPage() {
                                 {task.description || 'No description'}
                               </p>
                             </div>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                  <MoreHorizontal className="w-4 h-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setTaskToEdit(task)
-                                    setTaskFormOpen(true)
-                                  }}
-                                >
-                                  Edit Task
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="text-destructive"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    void deleteTask(task)
-                                  }}
-                                >
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            {canManage && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  >
+                                    <MoreHorizontal className="w-4 h-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setTaskToEdit(task)
+                                      setTaskFormOpen(true)
+                                    }}
+                                  >
+                                    Edit Task
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      void deleteTask(task)
+                                    }}
+                                  >
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
                           </div>
                           <div className="flex flex-wrap items-center gap-3 text-sm">
                             <Badge variant="outline" className={cn('gap-1', status.color)}>
@@ -436,12 +469,17 @@ export default function TasksPage() {
         }}
       />
 
+      {canManage && (
       <TaskFormModal
         open={taskFormOpen}
         onOpenChange={setTaskFormOpen}
         projects={projects}
         users={usersResolved}
-        teamId={canViewAllTeams ? viewTeamId : teamId}
+        teamId={
+          canViewAllTeams && viewTeamId !== ALL_TEAMS_VALUE
+            ? viewTeamId
+            : teamId
+        }
         task={taskToEdit}
         onSaved={() => void reload()}
         onTaskCreated={(created) => {
@@ -450,6 +488,7 @@ export default function TasksPage() {
           setModalOpen(true)
         }}
       />
+      )}
     </>
   )
 }

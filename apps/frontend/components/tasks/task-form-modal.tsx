@@ -67,6 +67,7 @@ export function TaskFormModal({
   const [submitting, setSubmitting] = useState(false)
 
   const isEdit = !!task
+  const usersInTeam = users.filter((u) => u.teamId === teamId)
 
   useEffect(() => {
     if (!open) return
@@ -82,7 +83,8 @@ export function TaskFormModal({
       setTitle('')
       setDescription('')
       setProjectId(projects[0]?.id ?? '')
-      setAssigneeId(users[0]?.id ?? '')
+      const firstInTeam = users.filter((u) => u.teamId === teamId)[0]
+      setAssigneeId(firstInTeam?.id ?? '')
       setPriority('medium')
       setStatus('todo')
       setDueDate(new Date().toISOString().slice(0, 10))
@@ -102,6 +104,13 @@ export function TaskFormModal({
     }
   }, [open, task, projects, users])
 
+  useEffect(() => {
+    if (!open || isEdit) return
+    if (assigneeId && !usersInTeam.some((u) => u.id === assigneeId)) {
+      setAssigneeId(usersInTeam[0]?.id ?? '')
+    }
+  }, [open, isEdit, teamId, assigneeId, usersInTeam])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!title.trim()) {
@@ -114,6 +123,10 @@ export function TaskFormModal({
     }
     if (!assigneeId) {
       toast.error('Select an assignee')
+      return
+    }
+    if (!usersInTeam.some((u) => u.id === assigneeId)) {
+      toast.error('Assignee must belong to the selected team')
       return
     }
     if (!dueDate) {
@@ -271,11 +284,17 @@ export function TaskFormModal({
                   <SelectValue placeholder="Assignee" />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name}
+                  {usersInTeam.length === 0 ? (
+                    <SelectItem value="__none__" disabled>
+                      No users in this team
                     </SelectItem>
-                  ))}
+                  ) : (
+                    usersInTeam.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>

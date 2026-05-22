@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiBody, ApiBearerAuth } from "@nestjs/swagger";
@@ -34,11 +35,21 @@ export class TasksController {
     return this.tasksService.createTask(user as UserItem, createTaskDto);
   }
 
+  @Get()
+  @ApiOperation({
+    summary:
+      "List tasks (managers: all or ?teamId=; employees: assigned tasks only)",
+  })
+  list(@User() user: any, @Query("teamId") teamId?: string) {
+    if (!user) throw new UnauthorizedException("Authentication required");
+    return this.tasksService.listTasks(user as UserItem, teamId);
+  }
+
   @Get("team/:teamId")
-  @ApiOperation({ summary: "List tasks for a team" })
+  @ApiOperation({ summary: "List tasks for a team (legacy path)" })
   listForTeam(@User() user: any, @Param("teamId") teamId: string) {
     if (!user) throw new UnauthorizedException("Authentication required");
-    return this.tasksService.listTasksForTeam(user as UserItem, teamId);
+    return this.tasksService.listTasks(user as UserItem, teamId);
   }
 
   @Get(":id/attachments/:attachmentId/download-url")

@@ -1,6 +1,7 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { CommentsService } from "./comments.service";
 import { CommentsController } from "./comments.controller";
+import { TasksModule } from "../tasks/tasks.module";
 import { CommentsRepository } from "./comments.repository";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { createSharedDynamoDBClient } from "../common/dynamo-client.factory";
@@ -17,6 +18,7 @@ const tableNameProvider = {
 };
 
 @Module({
+  imports: [forwardRef(() => TasksModule)],
   controllers: [CommentsController],
   providers: [
     dynamoClientProvider,

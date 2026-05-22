@@ -20,6 +20,11 @@ import type { Task, TaskStatus, Project, User } from '@/lib/types'
 import { api, ApiError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
+import { isPrivilegedRole } from '@/lib/roles'
+import {
+  ALL_TEAMS_VALUE,
+  resolveTaskListTeamId,
+} from '@/lib/task-list-scope'
 
 export default function KanbanPage() {
   const { teamId, user } = useAuth()
@@ -32,24 +37,42 @@ export default function KanbanPage() {
   const [taskFormOpen, setTaskFormOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedProject, setSelectedProject] = useState<string>('all')
+  const [viewTeamId, setViewTeamId] = useState(ALL_TEAMS_VALUE)
+  const [teamOptions, setTeamOptions] = useState<{ id: string; name: string }[]>([])
+  const canViewAllTeams = isPrivilegedRole(user?.role)
+  const canManage = canViewAllTeams
 
   const reload = useCallback(async () => {
     setLoading(true)
     try {
+      const scopeTeam = resolveTaskListTeamId(
+        canViewAllTeams,
+        viewTeamId,
+        teamId,
+      )
       const [p, t, u] = await Promise.all([
-        api.listProjects(teamId),
-        api.loadTasksWithMeta(teamId),
-        api.listUsers(teamId),
+        scopeTeam ? api.listProjects(scopeTeam) : Promise.resolve([]),
+        api.loadTasksWithMeta(scopeTeam),
+        scopeTeam ? api.listUsers(scopeTeam) : api.listUsers(),
       ])
       setProjects(p)
       setTasks(t)
       setMembers(u)
+      if (canViewAllTeams) {
+        const teams = await api.listTeams().catch(() => [])
+        setTeamOptions(teams.map((tm) => ({ id: tm.id, name: tm.name })))
+      }
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : 'Could not load board')
     } finally {
       setLoading(false)
     }
-  }, [teamId])
+  }, [teamId, viewTeamId, canViewAllTeams])
+
+  useEffect(() => {
+    if (!canViewAllTeams) setViewTeamId(teamId)
+    else setViewTeamId(ALL_TEAMS_VALUE)
+  }, [teamId, canViewAllTeams])
 
   useEffect(() => {
     void reload()
@@ -102,6 +125,21 @@ export default function KanbanPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            {canViewAllTeams && (
+              <Select value={viewTeamId} onValueChange={setViewTeamId}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Team" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_TEAMS_VALUE}>All Teams</SelectItem>
+                  {teamOptions.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -124,14 +162,19 @@ export default function KanbanPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              className="gap-2"
-              type="button"
-              onClick={() => setTaskFormOpen(true)}
-            >
-              <Plus className="w-4 h-4" />
-              New Task
-            </Button>
+            {canManage && (
+              <Button
+                className="gap-2"
+                type="button"
+                disabled={
+                  canViewAllTeams && viewTeamId === ALL_TEAMS_VALUE
+                }
+                onClick={() => setTaskFormOpen(true)}
+              >
+                <Plus className="w-4 h-4" />
+                New Task
+              </Button>
+            )}
           </div>
         </div>
 
@@ -144,10 +187,19 @@ export default function KanbanPage() {
         ) : tasks.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border py-16 text-center text-muted-foreground">
             <p className="mb-4">No tasks in this view.</p>
-            <Button type="button" onClick={() => setTaskFormOpen(true)} className="gap-2">
-              <Plus className="w-4 h-4" />
-              Create task
-            </Button>
+            {canManage && (
+              <Button
+                type="button"
+                disabled={
+                  canViewAllTeams && viewTeamId === ALL_TEAMS_VALUE
+                }
+                onClick={() => setTaskFormOpen(true)}
+                className="gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Create task
+              </Button>
+            )}
           </div>
         ) : (
           <KanbanBoard
@@ -179,19 +231,25 @@ export default function KanbanPage() {
         }}
       />
 
-      <TaskFormModal
-        open={taskFormOpen}
-        onOpenChange={setTaskFormOpen}
-        projects={projects}
-        users={members}
-        teamId={teamId}
-        onSaved={() => void reload()}
-        onTaskCreated={async (created) => {
-          await reload()
-          setSelectedTask(created)
-          setModalOpen(true)
-        }}
-      />
+      {canManage && (
+        <TaskFormModal
+          open={taskFormOpen}
+          onOpenChange={setTaskFormOpen}
+          projects={projects}
+          users={members}
+          teamId={
+            canViewAllTeams && viewTeamId !== ALL_TEAMS_VALUE
+              ? viewTeamId
+              : teamId
+          }
+          onSaved={() => void reload()}
+          onTaskCreated={async (created) => {
+            await reload()
+            setSelectedTask(created)
+            setModalOpen(true)
+          }}
+        />
+      )}
     </>
   )
 }

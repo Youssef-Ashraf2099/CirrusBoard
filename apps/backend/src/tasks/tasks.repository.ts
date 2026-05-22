@@ -7,6 +7,7 @@ import {
   UpdateCommand,
   DeleteCommand,
   QueryCommand,
+  ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { TaskItem } from "./tasks.model";
 
@@ -127,7 +128,7 @@ export class TasksRepository {
 
   async queryTasksByTeamId(
     teamId: string,
-    indexName = "teamId-index",
+    indexName = process.env.TASKS_TEAM_GSI || "teamId-index",
   ): Promise<TaskItem[]> {
     const cmd = new QueryCommand({
       TableName: this.tableName,
@@ -137,7 +138,41 @@ export class TasksRepository {
       ExpressionAttributeValues: { ":teamId": teamId },
     });
     const res = await this.client.send(cmd as any);
-    return (res as any).Items ?? [];
+    return ((res as any).Items ?? []) as TaskItem[];
+  }
+
+  async queryTasksByAssigneeId(
+    assigneeId: string,
+    indexName = process.env.TASKS_ASSIGNEE_GSI || "assigneeId-index",
+  ): Promise<TaskItem[]> {
+    const cmd = new QueryCommand({
+      TableName: this.tableName,
+      IndexName: indexName,
+      KeyConditionExpression: "#assigneeId = :assigneeId",
+      ExpressionAttributeNames: { "#assigneeId": "assigneeId" },
+      ExpressionAttributeValues: { ":assigneeId": assigneeId },
+    });
+    const res = await this.client.send(cmd as any);
+    return ((res as any).Items ?? []) as TaskItem[];
+  }
+
+  /** Manager company-wide listing (demo-scale scan). */
+  async listAllTasks(limit = 500): Promise<TaskItem[]> {
+    const items: TaskItem[] = [];
+    let lastKey: Record<string, unknown> | undefined;
+    do {
+      const res = await this.client.send(
+        new ScanCommand({
+          TableName: this.tableName,
+          ExclusiveStartKey: lastKey,
+          Limit: Math.min(limit - items.length, 100),
+        }) as any,
+      );
+      const batch = ((res as any).Items ?? []) as TaskItem[];
+      items.push(...batch);
+      lastKey = (res as any).LastEvaluatedKey;
+    } while (lastKey && items.length < limit);
+    return items;
   }
 
   async updateAttachment(

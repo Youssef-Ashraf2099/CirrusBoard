@@ -9,6 +9,7 @@ import { S3Module } from "../integrations/s3/s3.module";
 import { LambdaModule } from "../integrations/lambda/lambda.module";
 import { SnsModule } from "../integrations/sns/sns.module";
 import { AuditLogsModule } from "../audit-logs/audit-logs.module";
+import { UsersModule } from "../users/users.module";
 
 const dynamoClientProvider = {
   provide: "DYNAMO_CLIENT",
@@ -22,7 +23,7 @@ const tableNameProvider = {
 };
 
 @Module({
-  imports: [S3Module, LambdaModule, SnsModule, AuditLogsModule],
+  imports: [S3Module, LambdaModule, SnsModule, AuditLogsModule, UsersModule],
   controllers: [TasksController],
   providers: [
     dynamoClientProvider,
