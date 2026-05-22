@@ -8,6 +8,7 @@ import { TeamsRepository } from "./teams.repository";
 import { UsersService } from "../users/users.service";
 import type { UserItem } from "../users/users.model";
 import { isPrivileged } from "../common/permissions";
+import { normalizeTeamId, teamIdsMatch } from "../common/team-id.utils";
 import type { CreateTeamDto } from "./dto/create-team.dto";
 import type { UpdateTeamDto } from "./dto/update-team.dto";
 import type { PublicUser } from "../users/users.service";
@@ -23,9 +24,54 @@ export class TeamsService {
 
   private canSeeTeam(actor: UserItem, team: TeamItem): boolean {
     if (isPrivileged(actor.role)) return true;
-    if (actor.primaryTeamId === team.teamId) return true;
+    if (teamIdsMatch(actor.primaryTeamId ?? actor.teamIds?.[0], team.teamId))
+      return true;
     if ((team.memberUserIds ?? []).includes(actor.userId)) return true;
     return false;
+  }
+
+  /** Users on a team: primaryTeamId match plus explicit memberUserIds on the team record. */
+  async listMembers(actor: UserItem, teamId: string): Promise<PublicUser[]> {
+    const team = await this.repo.getById(teamId);
+    if (team && !this.canSeeTeam(actor, team)) {
+      throw new ForbiddenException("Access denied");
+    }
+    if (
+      !isPrivileged(actor.role) &&
+      !team &&
+      !teamIdsMatch(actor.primaryTeamId ?? actor.teamIds?.[0], teamId)
+    ) {
+      throw new ForbiddenException("Access denied");
+    }
+
+    const byPrimary = await this.users.listUsers(teamId);
+    const seen = new Set(byPrimary.map((u) => u.userId));
+    const merged = [...byPrimary];
+
+    for (const uid of team?.memberUserIds ?? []) {
+      if (seen.has(uid)) continue;
+      try {
+        merged.push(await this.users.getUser(uid));
+        seen.add(uid);
+      } catch {
+        /* stale member id */
+      }
+    }
+
+    return merged;
+  }
+
+  /** Keep team.memberUserIds in sync when a user is assigned primaryTeamId. */
+  async addMemberToTeamRecord(teamId: string, userId: string): Promise<void> {
+    const id = normalizeTeamId(teamId) || teamId;
+    const team = await this.repo.getById(id);
+    if (!team) return;
+    const ids = new Set([...(team.memberUserIds ?? []), userId]);
+    await this.repo.put({
+      ...team,
+      memberUserIds: [...ids],
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   private canMutateTeam(actor: UserItem, team: TeamItem): boolean {
@@ -64,22 +110,17 @@ export class TeamsService {
 
   /** Loads member users without changing shape when expand is false. */
   async expandMembers(
-    _actor: UserItem,
+    actor: UserItem,
     team: TeamItem,
     expand: boolean,
   ): Promise<TeamWithMembers> {
     if (!expand) return { ...team, memberUserIds: team.memberUserIds ?? [] };
-    const ids = team.memberUserIds ?? [];
-    const members: PublicUser[] = [];
-    for (const uid of ids) {
-      try {
-        const u = await this.users.getUser(uid);
-        members.push(u);
-      } catch {
-        /* skip stale ids */
-      }
-    }
-    return { ...team, memberUserIds: ids, members };
+    const members = await this.listMembers(actor, team.teamId);
+    return {
+      ...team,
+      memberUserIds: members.map((m) => m.userId),
+      members,
+    };
   }
 
   async update(actor: UserItem, id: string, input: UpdateTeamDto): Promise<TeamWithMembers> {

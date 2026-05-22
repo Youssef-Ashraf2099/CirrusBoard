@@ -16,4 +16,6 @@ export class UpdateProjectDto {
   startDate?: string;
   @ApiProperty({ required: false })
   endDate?: string;
+  @ApiProperty({ required: false })
+  teamId?: string;
 }

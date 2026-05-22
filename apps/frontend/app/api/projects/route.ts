@@ -3,10 +3,10 @@ import { forwardRequest, getBackendBaseUrl } from "@/lib/server/backend-proxy";
 
 export async function GET(request: NextRequest) {
   const teamId = request.nextUrl.searchParams.get("teamId");
-  if (!teamId) {
-    return NextResponse.json([]);
-  }
-  const url = `${getBackendBaseUrl()}/api/projects/team/${encodeURIComponent(teamId)}`;
+  const base = `${getBackendBaseUrl()}/api/projects`;
+  const url = teamId
+    ? `${base}?teamId=${encodeURIComponent(teamId)}`
+    : base;
   const headers = new Headers({ accept: "application/json" });
   const auth = request.headers.get("authorization");
   if (auth) headers.set("authorization", auth);

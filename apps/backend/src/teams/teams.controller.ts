@@ -7,53 +7,67 @@ import {
   Patch,
   Post,
   Query,
+  UnauthorizedException,
 } from "@nestjs/common";
-import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { TeamsService } from "./teams.service";
 import { CreateTeamDto } from "./dto/create-team.dto";
 import { UpdateTeamDto } from "./dto/update-team.dto";
 import { UserItem } from "../users/users.model";
-
-const DummyUser: UserItem = {
-  PK: "USER#dummy",
-  userId: "dummy",
-  email: "dummy@example.com",
-  name: "Dummy Manager",
-  role: "MANAGER",
-};
+import { User } from "../common/decorators/user.decorator";
 
 @ApiTags("Teams")
+@ApiBearerAuth()
 @Controller("teams")
 export class TeamsController {
   constructor(private readonly teams: TeamsService) {}
 
   @Post()
   @ApiOperation({ summary: "Create team" })
-  create(@Body() body: CreateTeamDto) {
-    return this.teams.create(DummyUser, body);
+  create(@User() user: any, @Body() body: CreateTeamDto) {
+    if (!user) throw new UnauthorizedException("Authentication required");
+    return this.teams.create(user as UserItem, body);
   }
 
   @Get()
   @ApiOperation({ summary: "List visible teams" })
-  findAll() {
-    return this.teams.findAll(DummyUser);
+  findAll(@User() user: any) {
+    if (!user) throw new UnauthorizedException("Authentication required");
+    return this.teams.findAll(user as UserItem);
+  }
+
+  @Get(":id/members")
+  @ApiOperation({
+    summary:
+      "List team members (users with primaryTeamId on this team + team.memberUserIds)",
+  })
+  listMembers(@User() user: any, @Param("id") id: string) {
+    if (!user) throw new UnauthorizedException("Authentication required");
+    return this.teams.listMembers(user as UserItem, id);
   }
 
   @Get(":id")
   @ApiOperation({ summary: "Get team; ?expand=members includes user objects" })
-  findOne(@Param("id") id: string, @Query("expand") expand?: string) {
-    return this.teams.findOne(DummyUser, id, expand === "members");
+  findOne(
+    @User() user: any,
+    @Param("id") id: string,
+    @Query("expand") expand?: string,
+  ) {
+    if (!user) throw new UnauthorizedException("Authentication required");
+    return this.teams.findOne(user as UserItem, id, expand === "members");
   }
 
   @Patch(":id")
   @ApiOperation({ summary: "Update team" })
-  update(@Param("id") id: string, @Body() body: UpdateTeamDto) {
-    return this.teams.update(DummyUser, id, body);
+  update(@User() user: any, @Param("id") id: string, @Body() body: UpdateTeamDto) {
+    if (!user) throw new UnauthorizedException("Authentication required");
+    return this.teams.update(user as UserItem, id, body);
   }
 
   @Delete(":id")
   @ApiOperation({ summary: "Delete team" })
-  remove(@Param("id") id: string) {
-    return this.teams.remove(DummyUser, id);
+  remove(@User() user: any, @Param("id") id: string) {
+    if (!user) throw new UnauthorizedException("Authentication required");
+    return this.teams.remove(user as UserItem, id);
   }
 }

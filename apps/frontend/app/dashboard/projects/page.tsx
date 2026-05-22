@@ -33,6 +33,17 @@ import { api, ApiError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
 import { isPrivilegedRole } from '@/lib/roles'
+import {
+  ALL_TEAMS_VALUE,
+  resolveTaskListTeamId,
+} from '@/lib/task-list-scope'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const statusColors = {
   active: 'bg-success/10 text-success border-success/20',
@@ -59,25 +70,41 @@ export default function ProjectsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [formOpen, setFormOpen] = useState(false)
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null)
+  const [viewTeamId, setViewTeamId] = useState(ALL_TEAMS_VALUE)
+  const [teamOptions, setTeamOptions] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    if (!canViewAllTeams) setViewTeamId(teamId)
+    else setViewTeamId(ALL_TEAMS_VALUE)
+  }, [teamId, canViewAllTeams])
 
   const reload = useCallback(async () => {
     setLoading(true)
     try {
+      const scopeTeam = resolveTaskListTeamId(
+        canViewAllTeams,
+        viewTeamId,
+        teamId,
+      )
       const [p, t, u] = await Promise.all([
-        api.listProjects(teamId),
-        api.loadTasksWithMeta(teamId, { employeeScope: !canViewAllTeams }),
-        api.listUsers(teamId),
+        api.listProjects(scopeTeam, { employeeScope: !canViewAllTeams }),
+        api.loadTasksWithMeta(scopeTeam, { employeeScope: !canViewAllTeams }),
+        scopeTeam ? api.listUsers(scopeTeam) : api.listUsers(),
       ])
       setProjects(p)
       setTasks(t)
       setMembers(u)
+      if (canViewAllTeams) {
+        const teams = await api.listTeams().catch(() => [])
+        setTeamOptions(teams.map((tm) => ({ id: tm.id, name: tm.name })))
+      }
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : 'Could not load projects'
       toast.error(msg)
     } finally {
       setLoading(false)
     }
-  }, [teamId])
+  }, [teamId, viewTeamId, canViewAllTeams])
 
   useEffect(() => {
     void reload()
@@ -107,9 +134,30 @@ export default function ProjectsPage() {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Projects</h1>
-            <p className="text-muted-foreground">Backed by Nest `GET /projects/team/:teamId`</p>
+            <p className="text-muted-foreground">
+              {canViewAllTeams
+                ? viewTeamId === ALL_TEAMS_VALUE
+                  ? 'All teams · managers see every project'
+                  : `Projects for team ${viewTeamId}`
+                : `Your team’s projects only`}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            {canViewAllTeams && (
+              <Select value={viewTeamId} onValueChange={setViewTeamId}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Team" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_TEAMS_VALUE}>All Teams</SelectItem>
+                  {teamOptions.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -138,6 +186,7 @@ export default function ProjectsPage() {
             {canManage && (
               <Button
                 className="gap-2"
+                disabled={canViewAllTeams && viewTeamId === ALL_TEAMS_VALUE}
                 onClick={() => {
                   setProjectToEdit(null)
                   setFormOpen(true)
@@ -223,6 +272,13 @@ export default function ProjectsPage() {
                             <h3 className="font-semibold text-foreground">{project.name}</h3>
                             <p className="text-xs text-muted-foreground">
                               {projectTasks.length} tasks
+                              {canViewAllTeams && (
+                                <span className="block font-mono mt-0.5">
+                                  team:{' '}
+                                  {teamOptions.find((t) => t.id === project.teamId)
+                                    ?.name ?? project.teamId}
+                                </span>
+                              )}
                             </p>
                           </div>
                         </div>
@@ -335,7 +391,11 @@ export default function ProjectsPage() {
         <ProjectFormModal
           open={formOpen}
           onOpenChange={setFormOpen}
-          teamId={teamId}
+          teamId={
+            canViewAllTeams && viewTeamId !== ALL_TEAMS_VALUE
+              ? viewTeamId
+              : teamId
+          }
           project={projectToEdit}
           onSaved={() => void reload()}
         />
