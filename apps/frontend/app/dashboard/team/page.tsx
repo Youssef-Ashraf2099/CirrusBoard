@@ -1,20 +1,26 @@
-'use client'
+"use client";
 
-import { useCallback, useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
+import { useCallback, useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -22,53 +28,60 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
-import { cn } from '@/lib/utils'
-import { Search, Users, Mail, Shield, UserCheck, Crown } from 'lucide-react'
-import type { Team, User } from '@/lib/types'
-import { api, ApiError } from '@/lib/api/client'
-import { useAuth } from '@/lib/auth-context'
-import { toast } from 'sonner'
-import { isPrivilegedRole } from '@/lib/roles'
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import { Search, Users, Mail, Shield, UserCheck, Crown } from "lucide-react";
+import type { Team, User } from "@/lib/types";
+import { api, ApiError } from "@/lib/api/client";
+import { useAuth } from "@/lib/auth-context";
+import { toast } from "sonner";
+import { isPrivilegedRole } from "@/lib/roles";
 
 const roleColors = {
-  admin: 'bg-destructive/10 text-destructive border-destructive/20',
-  manager: 'bg-primary/10 text-primary border-primary/20',
-  employee: 'bg-muted text-muted-foreground border-border',
-}
+  admin: "bg-destructive/10 text-destructive border-destructive/20",
+  manager: "bg-primary/10 text-primary border-primary/20",
+  employee: "bg-muted text-muted-foreground border-border",
+};
 
 const roleIcons = {
   admin: <Crown className="w-3 h-3" />,
   manager: <Shield className="w-3 h-3" />,
   employee: <UserCheck className="w-3 h-3" />,
-}
+};
 
 function mergeTeamMembers(roster: User[], byPrimaryTeam: User[]): User[] {
-  const map = new Map<string, User>()
+  const map = new Map<string, User>();
   for (const u of [...roster, ...byPrimaryTeam]) {
-    map.set(u.id, u)
+    map.set(u.id, u);
   }
-  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export default function TeamPage() {
-  const { teamId: sessionTeamId, user: currentUser } = useAuth()
-  const canManageTeams = isPrivilegedRole(currentUser?.role)
-  const [viewTeamId, setViewTeamId] = useState(sessionTeamId)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [members, setMembers] = useState<User[]>([])
-  const [teamRecord, setTeamRecord] = useState<Team | null>(null)
-  const [allTeams, setAllTeams] = useState<Team[]>([])
-  const [loading, setLoading] = useState(true)
+  const { teamId: sessionTeamId, user: currentUser } = useAuth();
+  const activeSessionTeamId = sessionTeamId || currentUser?.teamIds?.[0] || "";
+  const canManageTeams = isPrivilegedRole(currentUser?.role);
+  const [viewTeamId, setViewTeamId] = useState(activeSessionTeamId);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [members, setMembers] = useState<User[]>([]);
+  const [teamRecord, setTeamRecord] = useState<Team | null>(null);
+  const [allTeams, setAllTeams] = useState<Team[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setViewTeamId(sessionTeamId)
-  }, [sessionTeamId])
+    setViewTeamId(activeSessionTeamId);
+  }, [activeSessionTeamId]);
 
   const reload = useCallback(async () => {
-    const activeTeamId = viewTeamId || sessionTeamId
-    if (!activeTeamId) return
-    setLoading(true)
+    const activeTeamId = viewTeamId || activeSessionTeamId;
+    if (!activeTeamId) {
+      setMembers([]);
+      setTeamRecord(null);
+      setAllTeams([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
       const [team, byPrimary, teamList] = await Promise.all([
         api.getTeam(activeTeamId).catch(() => null),
@@ -76,33 +89,33 @@ export default function TeamPage() {
         canManageTeams
           ? api.listTeams().catch(() => [] as Team[])
           : Promise.resolve([] as Team[]),
-      ])
-      setTeamRecord(team)
-      setAllTeams(teamList)
-      const roster = team?.members ?? []
-      setMembers(mergeTeamMembers(roster, byPrimary))
+      ]);
+      setTeamRecord(team);
+      setAllTeams(teamList);
+      const roster = team?.members ?? [];
+      setMembers(mergeTeamMembers(roster, byPrimary));
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : 'Could not load team')
+      toast.error(e instanceof ApiError ? e.message : "Could not load team");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [viewTeamId, sessionTeamId, canManageTeams])
+  }, [viewTeamId, activeSessionTeamId, canManageTeams]);
 
   useEffect(() => {
-    void reload()
-  }, [reload])
+    void reload();
+  }, [reload]);
 
   const filteredUsers = members.filter(
     (user) =>
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.id.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+  );
 
   const activeTeamName =
     teamRecord?.name ??
     allTeams.find((t) => t.id === viewTeamId)?.name ??
-    viewTeamId
+    viewTeamId;
 
   return (
     <motion.div
@@ -115,9 +128,7 @@ export default function TeamPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Team</h1>
           <p className="text-muted-foreground">
-            {activeTeamName
-              ? `Members of ${activeTeamName}`
-              : 'Team members'}
+            {activeTeamName ? `Members of ${activeTeamName}` : "Team members"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -155,8 +166,8 @@ export default function TeamPage() {
           <div>
             <CardTitle className="text-lg">People on this team</CardTitle>
             <p className="text-sm text-muted-foreground">
-              {members.length} member{members.length === 1 ? '' : 's'} · roster
-              + users with primary team{' '}
+              {members.length} member{members.length === 1 ? "" : "s"} · roster
+              + users with primary team{" "}
               <code className="text-xs">{viewTeamId}</code>
             </p>
           </div>
@@ -217,7 +228,10 @@ export default function TeamPage() {
                     <TableCell>
                       <Badge
                         variant="outline"
-                        className={cn('capitalize gap-1', roleColors[user.role])}
+                        className={cn(
+                          "capitalize gap-1",
+                          roleColors[user.role],
+                        )}
                       >
                         {roleIcons[user.role]}
                         {user.role}
@@ -231,5 +245,5 @@ export default function TeamPage() {
         </CardContent>
       </Card>
     </motion.div>
-  )
+  );
 }
