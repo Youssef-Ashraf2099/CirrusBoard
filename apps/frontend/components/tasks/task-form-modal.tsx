@@ -28,7 +28,7 @@ import type {
   User,
 } from "@/lib/types";
 import { api, ApiError } from "@/lib/api/client";
-import { mapApiTaskToTask } from "@/lib/api/mappers";
+import { isUserInTeam, mapApiTaskToTask } from "@/lib/api/mappers";
 import { buildUserMap } from "@/lib/api/client";
 import type { TaskAttachment } from "@/lib/types";
 import {
@@ -77,8 +77,8 @@ export function TaskFormModal({
 
   const isEdit = !!task;
   const selectedProject = projects.find((p) => p.id === projectId);
-  const usersInTeam = users.filter(
-    (u) => u.teamId === (selectedProject?.teamId ?? projectTeamId),
+  const usersInTeam = users.filter((u) =>
+    isUserInTeam(u, selectedProject?.teamId ?? projectTeamId),
   );
   const assigneeOptions =
     projectAssignees.length > 0 ? projectAssignees : usersInTeam;
@@ -157,7 +157,7 @@ export function TaskFormModal({
       setDescription("");
       setProjectId(projects[0]?.id ?? "");
       setProjectTeamId(teamId);
-      const firstInTeam = users.filter((u) => u.teamId === teamId)[0];
+      const firstInTeam = users.find((u) => isUserInTeam(u, teamId));
       setAssigneeId(firstInTeam?.id ?? "");
       setPriority("medium");
       setStatus("todo");
