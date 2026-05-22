@@ -46,8 +46,10 @@ export class ProjectsService {
     projects: ProjectItem[],
   ): ProjectItem[] {
     if (isPrivileged(actor.role)) return projects;
-    return projects.filter((p) =>
-      (p.memberUserIds ?? []).includes(actor.userId),
+    return projects.filter(
+      (p) =>
+        isTeamMember(actor, p.teamId ?? "") ||
+        (p.memberUserIds ?? []).includes(actor.userId),
     );
   }
 
@@ -91,7 +93,10 @@ export class ProjectsService {
     if (!project) throw new NotFoundException("Project not found");
     if (!isPrivileged(actor.role)) {
       const roster = project.memberUserIds ?? [];
-      if (!roster.includes(actor.userId)) {
+      if (
+        !isTeamMember(actor, project.teamId ?? "") &&
+        !roster.includes(actor.userId)
+      ) {
         throw new ForbiddenException("Access denied");
       }
     }

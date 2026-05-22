@@ -10,6 +10,7 @@ import { TeamsRepository } from "./teams.repository";
 import { UsersService } from "../users/users.service";
 import type { UserItem } from "../users/users.model";
 import { isPrivileged } from "../common/permissions";
+import { hasTeamAccess } from "../common/auth/cognito-auth.utils";
 import type { CreateTeamDto } from "./dto/create-team.dto";
 import type { UpdateTeamDto } from "./dto/update-team.dto";
 import type { PublicUser } from "../users/users.service";
@@ -26,9 +27,7 @@ export class TeamsService {
 
   private canSeeTeam(actor: UserItem, team: TeamItem): boolean {
     if (isPrivileged(actor.role)) return true;
-    if (actor.primaryTeamId === team.teamId) return true;
-    if ((team.memberUserIds ?? []).includes(actor.userId)) return true;
-    return false;
+    return hasTeamAccess(actor, team.teamId);
   }
 
   private canMutateTeam(actor: UserItem, team: TeamItem): boolean {
@@ -49,16 +48,14 @@ export class TeamsService {
       managerId: input.managerId ?? actor.userId,
       memberUserIds: input.memberUserIds ?? [],
     });
+    await this.syncTeamMembers(created.teamId, [], created.memberUserIds ?? []);
     return this.expandMembers(actor, created, true);
   }
 
   async findAll(actor: UserItem): Promise<TeamWithMembers[]> {
     const all = await this.repo.scanAll();
     const filtered = all.filter((t) => this.canSeeTeam(actor, t));
-    return filtered.map((t) => ({
-      ...t,
-      memberUserIds: t.memberUserIds ?? [],
-    }));
+    return Promise.all(filtered.map((t) => this.expandMembers(actor, t, true)));
   }
 
   async findOne(
@@ -112,6 +109,11 @@ export class TeamsService {
       updatedAt: now,
     };
     await this.repo.put(next);
+    await this.syncTeamMembers(
+      next.teamId,
+      existing.memberUserIds ?? [],
+      next.memberUserIds ?? [],
+    );
     return this.expandMembers(actor, next, true);
   }
 
@@ -166,5 +168,23 @@ export class TeamsService {
       memberUserIds: ids,
       updatedAt: now,
     });
+  }
+
+  private async syncTeamMembers(
+    teamId: string,
+    previousMembers: string[],
+    nextMembers: string[],
+  ): Promise<void> {
+    const previous = new Set(previousMembers);
+    const next = new Set(nextMembers);
+    const added = [...next].filter((id) => !previous.has(id));
+    const removed = [...previous].filter((id) => !next.has(id));
+
+    await Promise.all(
+      added.map((userId) => this.users.addTeamMembership(userId, teamId)),
+    );
+    await Promise.all(
+      removed.map((userId) => this.users.removeTeamMembership(userId, teamId)),
+    );
   }
 }

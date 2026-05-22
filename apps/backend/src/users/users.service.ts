@@ -178,6 +178,21 @@ export class UsersService {
     return this.repo.deleteUser(userId);
   }
 
+  async addTeamMembership(userId: string, teamId: string): Promise<void> {
+    const existing = await this.repo.getUserById(userId);
+    if (!existing) return;
+    const next = new Set(existing.teamIds ?? []);
+    next.add(teamId);
+    await this.repo.updateUser(userId, { teamIds: [...next] });
+  }
+
+  async removeTeamMembership(userId: string, teamId: string): Promise<void> {
+    const existing = await this.repo.getUserById(userId);
+    if (!existing) return;
+    const next = (existing.teamIds ?? []).filter((id) => id !== teamId);
+    await this.repo.updateUser(userId, { teamIds: next });
+  }
+
   async validateLogin(email: string, password: string): Promise<PublicUser> {
     const u = await this.repo.findUserByEmail(email.trim().toLowerCase());
     if (!u || (u.password ?? "") !== password) {
