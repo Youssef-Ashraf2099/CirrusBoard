@@ -54,7 +54,7 @@ const emptyForm = (): FormState => ({
   email: '',
   password: '',
   role: 'EMPLOYEE',
-  primaryTeamId: DEFAULT_TEAM_ID,
+  primaryTeamId: '',
   isActive: true,
 })
 
@@ -121,7 +121,7 @@ function UsersManagementInner() {
         email: form.email,
         password: form.password || 'changeme',
         role: form.role,
-        primaryTeamId: form.primaryTeamId || DEFAULT_TEAM_ID,
+        primaryTeamId: form.primaryTeamId || undefined,
       })
       toast.success('User created')
       setCreateOpen(false)

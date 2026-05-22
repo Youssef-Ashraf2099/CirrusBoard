@@ -10,7 +10,6 @@ import {
 import { useRouter } from "next/navigation";
 import type { User, UserRole } from "@/lib/types";
 import { api, ApiError, type LoginResult } from "@/lib/api/client";
-import { DEFAULT_TEAM_ID } from "@/lib/config";
 import { mapUiRoleToApi } from "@/lib/api/mappers";
 
 const STORAGE_KEY = "taskflow_user";

@@ -355,10 +355,7 @@ export const api = {
       "/api/users",
       {
         method: "POST",
-        json: {
-          ...input,
-          primaryTeamId: input.primaryTeamId ?? DEFAULT_TEAM_ID,
-        },
+        json: input,
       },
       { allowRefresh: false },
     );
@@ -579,16 +576,7 @@ export const api = {
   }): Promise<Project> {
     const raw = await request<ApiProject>("/api/projects", {
       method: "POST",
-      json: {
-        name: input.name,
-        description: input.description,
-        teamId: input.teamId ?? DEFAULT_TEAM_ID,
-        memberUserIds: input.memberUserIds ?? [],
-        status: input.status,
-        progress: input.progress,
-        startDate: input.startDate,
-        endDate: input.endDate,
-      },
+      json: input,
     });
     return mapApiProjectToProject(raw);
   },

@@ -152,15 +152,25 @@ export class TasksRepository {
     assigneeId: string,
     indexName = process.env.TASKS_ASSIGNEE_GSI || "assigneeId-index",
   ): Promise<TaskItem[]> {
-    const cmd = new QueryCommand({
-      TableName: this.tableName,
-      IndexName: indexName,
-      KeyConditionExpression: "#assigneeId = :assigneeId",
-      ExpressionAttributeNames: { "#assigneeId": "assigneeId" },
-      ExpressionAttributeValues: { ":assigneeId": assigneeId },
-    });
-    const res = await this.client.send(cmd as any);
-    return ((res as any).Items ?? []) as TaskItem[];
+    try {
+      const cmd = new QueryCommand({
+        TableName: this.tableName,
+        IndexName: indexName,
+        KeyConditionExpression: "#assigneeId = :assigneeId",
+        ExpressionAttributeNames: { "#assigneeId": "assigneeId" },
+        ExpressionAttributeValues: { ":assigneeId": assigneeId },
+      });
+      const res = await this.client.send(cmd as any);
+      return ((res as any).Items ?? []) as TaskItem[];
+    } catch (error: any) {
+      const message = String(error?.message ?? error ?? "");
+      if (!message.includes("specified index") && !message.includes(indexName)) {
+        throw error;
+      }
+
+      const items = await this.listAllTasks();
+      return items.filter((task) => task.assigneeId === assigneeId);
+    }
   }
 
   /** Manager company-wide listing (demo-scale scan). */
