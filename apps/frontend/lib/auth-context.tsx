@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const teamId = user?.teamId ?? DEFAULT_TEAM_ID;
+  const teamId = user?.teamId ?? "";
 
   useEffect(() => {
     const hydrate = async () => {
@@ -162,7 +162,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
         role: mapUiRoleToApi(role),
-        primaryTeamId: DEFAULT_TEAM_ID,
       });
 
       const result = await api.login(email, password);
