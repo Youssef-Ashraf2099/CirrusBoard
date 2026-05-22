@@ -316,7 +316,7 @@ export class TasksService {
     };
     const updated = await this.repo.updateTask(taskId, updates);
     if (!this.isClosedStatus(task.status) && this.isClosedStatus(status)) {
-      void this.recordTaskClosedMetrics({
+      await this.recordTaskClosedMetrics({
         ...task,
         ...updated,
         status,
