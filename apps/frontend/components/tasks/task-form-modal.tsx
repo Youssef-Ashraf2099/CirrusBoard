@@ -65,28 +65,9 @@ export function TaskFormModal({
   const [uploads, setUploads] = useState<StagedUpload[]>([])
   const [editAttachments, setEditAttachments] = useState<TaskAttachment[]>([])
   const [submitting, setSubmitting] = useState(false)
-  const [teamProjects, setTeamProjects] = useState<Project[]>([])
-  const [projectsLoading, setProjectsLoading] = useState(false)
 
   const isEdit = !!task
   const usersInTeam = users.filter((u) => u.teamId === teamId)
-  const availableProjects =
-    teamProjects.length > 0
-      ? teamProjects
-      : projects.filter((p) => p.teamId === teamId)
-
-  useEffect(() => {
-    if (!open || !teamId) {
-      setTeamProjects([])
-      return
-    }
-    setProjectsLoading(true)
-    void api
-      .listProjects(teamId)
-      .then(setTeamProjects)
-      .catch(() => setTeamProjects([]))
-      .finally(() => setProjectsLoading(false))
-  }, [open, teamId])
 
   useEffect(() => {
     if (!open) return
@@ -101,7 +82,7 @@ export function TaskFormModal({
     } else {
       setTitle('')
       setDescription('')
-      setProjectId('')
+      setProjectId(projects[0]?.id ?? '')
       const firstInTeam = users.filter((u) => u.teamId === teamId)[0]
       setAssigneeId(firstInTeam?.id ?? '')
       setPriority('medium')
@@ -122,14 +103,6 @@ export function TaskFormModal({
       setEditAttachments([])
     }
   }, [open, task, projects, users])
-
-  useEffect(() => {
-    if (!open || availableProjects.length === 0) return
-    const valid = availableProjects.some((p) => p.id === projectId)
-    if (!valid) {
-      setProjectId(availableProjects[0]?.id ?? '')
-    }
-  }, [open, availableProjects, projectId])
 
   useEffect(() => {
     if (!open || isEdit) return
@@ -291,35 +264,18 @@ export function TaskFormModal({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Project</Label>
-              <Select
-                value={projectId || undefined}
-                onValueChange={setProjectId}
-                disabled={projectsLoading || availableProjects.length === 0}
-              >
+              <Select value={projectId} onValueChange={setProjectId}>
                 <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      projectsLoading
-                        ? 'Loading projects…'
-                        : availableProjects.length === 0
-                          ? 'No projects for this team'
-                          : 'Select a project'
-                    }
-                  />
+                  <SelectValue placeholder="Project" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableProjects.map((p) => (
+                  {projects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {!projectsLoading && availableProjects.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Create a project for this team first, then assign the task.
-                </p>
-              )}
             </div>
             <div className="space-y-2">
               <Label>Assignee</Label>
