@@ -1,48 +1,54 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { toast } from 'sonner'
-import type { Project, Task, TaskPriority, TaskStatus, User } from '@/lib/types'
-import { api, ApiError } from '@/lib/api/client'
-import { mapApiTaskToTask } from '@/lib/api/mappers'
-import { buildUserMap } from '@/lib/api/client'
-import type { TaskAttachment } from '@/lib/types'
+} from "@/components/ui/select";
+import { toast } from "sonner";
+import type {
+  Project,
+  Task,
+  TaskPriority,
+  TaskStatus,
+  User,
+} from "@/lib/types";
+import { api, ApiError } from "@/lib/api/client";
+import { mapApiTaskToTask } from "@/lib/api/mappers";
+import { buildUserMap } from "@/lib/api/client";
+import type { TaskAttachment } from "@/lib/types";
 import {
   FileUploadDropzone,
   patchStagedUploads,
   type StagedUpload,
-} from '@/components/upload/file-upload-dropzone'
-import { uploadTaskAttachments } from '@/lib/upload/task-attachments'
-import { TaskAttachmentsPanel } from '@/components/tasks/task-attachments-panel'
+} from "@/components/upload/file-upload-dropzone";
+import { uploadTaskAttachments } from "@/lib/upload/task-attachments";
+import { TaskAttachmentsPanel } from "@/components/tasks/task-attachments-panel";
 
 interface TaskFormModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  projects: Project[]
-  users: User[]
-  teamId: string
-  task?: Task | null
-  onSaved: () => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  projects: Project[];
+  users: User[];
+  teamId: string;
+  task?: Task | null;
+  onSaved: () => void;
   /** After create (and uploads), opens detail view with fresh task from API. */
-  onTaskCreated?: (task: Task) => void
+  onTaskCreated?: (task: Task) => void;
 }
 
 export function TaskFormModal({
@@ -55,86 +61,134 @@ export function TaskFormModal({
   onSaved,
   onTaskCreated,
 }: TaskFormModalProps) {
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [projectId, setProjectId] = useState('')
-  const [assigneeId, setAssigneeId] = useState('')
-  const [priority, setPriority] = useState<TaskPriority>('medium')
-  const [status, setStatus] = useState<TaskStatus>('todo')
-  const [dueDate, setDueDate] = useState('')
-  const [uploads, setUploads] = useState<StagedUpload[]>([])
-  const [editAttachments, setEditAttachments] = useState<TaskAttachment[]>([])
-  const [submitting, setSubmitting] = useState(false)
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [assigneeId, setAssigneeId] = useState("");
+  const [projectAssignees, setProjectAssignees] = useState<User[]>([]);
+  const [projectTeamId, setProjectTeamId] = useState(teamId);
+  const [priority, setPriority] = useState<TaskPriority>("medium");
+  const [status, setStatus] = useState<TaskStatus>("todo");
+  const [dueDate, setDueDate] = useState("");
+  const [uploads, setUploads] = useState<StagedUpload[]>([]);
+  const [editAttachments, setEditAttachments] = useState<TaskAttachment[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [loadingProjectAssignees, setLoadingProjectAssignees] = useState(false);
 
-  const isEdit = !!task
-  const usersInTeam = users.filter((u) => u.teamId === teamId)
+  const isEdit = !!task;
+  const usersInTeam = users.filter((u) => u.teamId === projectTeamId);
 
   useEffect(() => {
-    if (!open) return
-    if (task) {
-      setTitle(task.title)
-      setDescription(task.description ?? '')
-      setProjectId(task.projectId)
-      setAssigneeId(task.assigneeId ?? '')
-      setPriority(task.priority)
-      setStatus(task.status)
-      setDueDate(task.dueDate ? task.dueDate.slice(0, 10) : '')
-    } else {
-      setTitle('')
-      setDescription('')
-      setProjectId(projects[0]?.id ?? '')
-      const firstInTeam = users.filter((u) => u.teamId === teamId)[0]
-      setAssigneeId(firstInTeam?.id ?? '')
-      setPriority('medium')
-      setStatus('todo')
-      setDueDate(new Date().toISOString().slice(0, 10))
+    if (!open) return;
+
+    let cancelled = false;
+
+    const selectedProject = projects.find((p) => p.id === projectId);
+    if (!selectedProject) {
+      setProjectAssignees([]);
+      setProjectTeamId(teamId);
+      return;
     }
-    setUploads([])
+
+    const applyProjectMembers = async () => {
+      setLoadingProjectAssignees(true);
+      try {
+        const fullProject = await api.getProject(selectedProject.id, true);
+        if (cancelled) return;
+        setProjectTeamId(fullProject.teamId);
+        setProjectAssignees(fullProject.members ?? []);
+      } catch {
+        if (cancelled) return;
+        setProjectTeamId(selectedProject.teamId);
+        setProjectAssignees(selectedProject.members ?? []);
+      } finally {
+        if (!cancelled) {
+          setLoadingProjectAssignees(false);
+        }
+      }
+    };
+
+    void applyProjectMembers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, projectId, projects, teamId]);
+
+  const assigneeOptions =
+    projectAssignees.length > 0 ? projectAssignees : usersInTeam;
+
+  useEffect(() => {
+    if (!open) return;
     if (task) {
-      setEditAttachments(task.attachments ?? [])
+      setTitle(task.title);
+      setDescription(task.description ?? "");
+      setProjectId(task.projectId);
+      setAssigneeId(task.assigneeId ?? "");
+      setProjectTeamId(task.teamId ?? teamId);
+      setPriority(task.priority);
+      setStatus(task.status);
+      setDueDate(task.dueDate ? task.dueDate.slice(0, 10) : "");
+    } else {
+      setTitle("");
+      setDescription("");
+      setProjectId(projects[0]?.id ?? "");
+      setProjectTeamId(teamId);
+      const firstInTeam = users.filter((u) => u.teamId === teamId)[0];
+      setAssigneeId(firstInTeam?.id ?? "");
+      setPriority("medium");
+      setStatus("todo");
+      setDueDate(new Date().toISOString().slice(0, 10));
+    }
+    setUploads([]);
+    if (task) {
+      setEditAttachments(task.attachments ?? []);
       void api
         .getTask(task.id)
         .then((raw) => {
-          const mapped = mapApiTaskToTask(raw, buildUserMap(users), 0)
-          setEditAttachments(mapped.attachments ?? [])
+          const mapped = mapApiTaskToTask(raw, buildUserMap(users), 0);
+          setEditAttachments(mapped.attachments ?? []);
         })
-        .catch(() => {})
+        .catch(() => {});
     } else {
-      setEditAttachments([])
+      setEditAttachments([]);
     }
-  }, [open, task, projects, users])
+  }, [open, task, projects, users, teamId]);
 
   useEffect(() => {
-    if (!open || isEdit) return
-    if (assigneeId && !usersInTeam.some((u) => u.id === assigneeId)) {
-      setAssigneeId(usersInTeam[0]?.id ?? '')
+    if (!open || isEdit) return;
+    if (assigneeId && !assigneeOptions.some((u) => u.id === assigneeId)) {
+      setAssigneeId(assigneeOptions[0]?.id ?? "");
     }
-  }, [open, isEdit, teamId, assigneeId, usersInTeam])
+  }, [open, isEdit, assigneeId, assigneeOptions]);
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+    e.preventDefault();
     if (!title.trim()) {
-      toast.error('Title is required')
-      return
+      toast.error("Title is required");
+      return;
     }
     if (!projectId) {
-      toast.error('Select a project')
-      return
+      toast.error("Select a project");
+      return;
     }
     if (!assigneeId) {
-      toast.error('Select an assignee')
-      return
+      toast.error("Select an assignee");
+      return;
     }
-    if (!usersInTeam.some((u) => u.id === assigneeId)) {
-      toast.error('Assignee must belong to the selected team')
-      return
+    if (!assigneeOptions.some((u) => u.id === assigneeId)) {
+      toast.error("Assignee must belong to the selected project");
+      return;
     }
     if (!dueDate) {
-      toast.error('Due date is required')
-      return
+      toast.error("Due date is required");
+      return;
     }
 
-    setSubmitting(true)
+    const resolvedProject = projects.find((p) => p.id === projectId);
+    const resolvedTeamId = resolvedProject?.teamId ?? projectTeamId;
+
+    setSubmitting(true);
     try {
       if (task) {
         await api.patchTask(task.id, {
@@ -144,8 +198,8 @@ export function TaskFormModal({
           dueDate,
           assigneeId,
           status,
-        })
-        toast.success('Task updated')
+        });
+        toast.success("Task updated");
       } else {
         const created = await api.createTask({
           title,
@@ -153,25 +207,25 @@ export function TaskFormModal({
           priority,
           dueDate,
           assigneeId,
-          teamId,
+          teamId: resolvedTeamId,
           projectId,
           status,
-        })
+        });
 
         const pendingFiles = uploads
-          .filter((u) => u.status === 'staged')
-          .map((u) => u.file)
+          .filter((u) => u.status === "staged")
+          .map((u) => u.file);
 
         if (pendingFiles.length > 0) {
           try {
-            const stagedItems = uploads.filter((u) => u.status === 'staged')
+            const stagedItems = uploads.filter((u) => u.status === "staged");
             for (const item of stagedItems) {
               setUploads((prev) =>
                 patchStagedUploads(prev, item.id, {
-                  status: 'uploading',
+                  status: "uploading",
                   progress: 0,
                 }),
-              )
+              );
               const updated = await uploadTaskAttachments(
                 created.taskId,
                 [item.file],
@@ -179,59 +233,63 @@ export function TaskFormModal({
                   setUploads((prev) =>
                     patchStagedUploads(prev, item.id, {
                       progress: percent,
-                      status: 'uploading',
+                      status: "uploading",
                     }),
-                  )
+                  );
                 },
-              )
+              );
               if (updated?.attachments?.length) {
-                setEditAttachments(updated.attachments)
+                setEditAttachments(updated.attachments);
               }
               setUploads((prev) =>
                 patchStagedUploads(prev, item.id, {
-                  status: 'complete',
+                  status: "complete",
                   progress: 100,
                 }),
-              )
+              );
             }
           } catch (uploadErr) {
             const msg =
               uploadErr instanceof ApiError
                 ? uploadErr.message
-                : 'Task created but file upload failed'
-            toast.error(msg)
+                : "Task created but file upload failed";
+            toast.error(msg);
             try {
-              const fullTask = await api.getTaskWithMeta(created.taskId)
-              onTaskCreated?.(fullTask)
+              const fullTask = await api.getTaskWithMeta(created.taskId);
+              onTaskCreated?.(fullTask);
             } catch {
               onTaskCreated?.(
                 mapApiTaskToTask(created, buildUserMap(users), 0),
-              )
+              );
             }
-            onSaved()
-            onOpenChange(false)
-            return
+            onSaved();
+            onOpenChange(false);
+            return;
           }
         }
 
-        toast.success('Task created')
+        toast.success("Task created");
         try {
-          const fullTask = await api.getTaskWithMeta(created.taskId)
-          onTaskCreated?.(fullTask)
+          const fullTask = await api.getTaskWithMeta(created.taskId);
+          onTaskCreated?.(fullTask);
         } catch {
           onTaskCreated?.(
-            mapApiTaskToTask(created, buildUserMap(users), editAttachments.length),
-          )
+            mapApiTaskToTask(
+              created,
+              buildUserMap(users),
+              editAttachments.length,
+            ),
+          );
         }
       }
-      onSaved()
-      onOpenChange(false)
+      onSaved();
+      onOpenChange(false);
     } catch (err) {
       const msg =
-        err instanceof ApiError ? err.message : 'Something went wrong'
-      toast.error(msg)
+        err instanceof ApiError ? err.message : "Something went wrong";
+      toast.error(msg);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
@@ -239,7 +297,7 @@ export function TaskFormModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit task' : 'Create task'}</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit task" : "Create task"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
@@ -264,7 +322,13 @@ export function TaskFormModal({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Project</Label>
-              <Select value={projectId} onValueChange={setProjectId}>
+              <Select
+                value={projectId}
+                onValueChange={(value) => {
+                  setProjectId(value);
+                  setAssigneeId("");
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Project" />
                 </SelectTrigger>
@@ -278,18 +342,25 @@ export function TaskFormModal({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Assignee</Label>
+              <div className="flex items-center justify-between gap-3">
+                <Label>Assignee</Label>
+                {loadingProjectAssignees ? (
+                  <span className="text-xs text-muted-foreground">
+                    Loading project members…
+                  </span>
+                ) : null}
+              </div>
               <Select value={assigneeId} onValueChange={setAssigneeId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Assignee" />
                 </SelectTrigger>
                 <SelectContent>
-                  {usersInTeam.length === 0 ? (
+                  {assigneeOptions.length === 0 ? (
                     <SelectItem value="__none__" disabled>
-                      No users in this team
+                      No assignees for this project
                     </SelectItem>
                   ) : (
-                    usersInTeam.map((u) => (
+                    assigneeOptions.map((u) => (
                       <SelectItem key={u.id} value={u.id}>
                         {u.name}
                       </SelectItem>
@@ -297,6 +368,9 @@ export function TaskFormModal({
                   )}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Showing people assigned to the selected project.
+              </p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -364,17 +438,17 @@ export function TaskFormModal({
                   attachments={editAttachments}
                   onAttachmentsChange={async () => {
                     try {
-                      const raw = await api.getTask(task.id)
+                      const raw = await api.getTask(task.id);
                       const mapped = mapApiTaskToTask(
                         raw,
                         buildUserMap(users),
                         0,
-                      )
-                      setEditAttachments(mapped.attachments ?? [])
+                      );
+                      setEditAttachments(mapped.attachments ?? []);
                     } catch {
                       /* panel already refreshed its list */
                     }
-                    onSaved()
+                    onSaved();
                   }}
                 />
               )
@@ -389,11 +463,11 @@ export function TaskFormModal({
               Cancel
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? 'Saving…' : isEdit ? 'Save changes' : 'Create'}
+              {submitting ? "Saving…" : isEdit ? "Save changes" : "Create"}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

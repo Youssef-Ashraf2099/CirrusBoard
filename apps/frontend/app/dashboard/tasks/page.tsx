@@ -111,8 +111,20 @@ export default function TasksPage() {
         viewTeamId,
         teamId,
       );
+      const projectsPromise = scopeTeam
+        ? api.listProjects(scopeTeam)
+        : canViewAllTeams
+          ? api
+              .listTeams()
+              .then((teams) =>
+                Promise.all(
+                  teams.map((t) => api.listProjects(t.id).catch(() => [])),
+                ),
+              )
+              .then((groups) => groups.flat())
+          : Promise.resolve([]);
       const [p, tRaw, mu] = await Promise.all([
-        scopeTeam ? api.listProjects(scopeTeam) : Promise.resolve([]),
+        projectsPromise,
         api.loadTasksWithMeta(scopeTeam),
         scopeTeam ? api.listUsers(scopeTeam) : api.listUsers(),
       ]);
@@ -519,11 +531,7 @@ export default function TasksPage() {
           onOpenChange={setTaskFormOpen}
           projects={projects}
           users={usersResolved}
-          teamId={
-            canViewAllTeams && viewTeamId !== ALL_TEAMS_VALUE
-              ? viewTeamId
-              : teamId
-          }
+          teamId={teamId}
           task={taskToEdit}
           onSaved={() => void reload()}
           onTaskCreated={(created) => {
