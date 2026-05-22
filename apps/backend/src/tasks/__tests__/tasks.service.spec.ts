@@ -168,6 +168,19 @@ describe("TasksService", () => {
         }),
       }),
     );
+    expect(cloudwatchSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          Namespace: "CirrusBoard",
+          MetricData: [
+            expect.objectContaining({
+              MetricName: "AverageTimeToClose",
+              Unit: "Hours",
+            }),
+          ],
+        }),
+      }),
+    );
   });
 
   it("counts overdue tasks and publishes the overdue metric", async () => {
