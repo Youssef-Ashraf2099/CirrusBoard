@@ -447,11 +447,13 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref BackendLaunchTemplate
         Version: !GetAtt BackendLaunchTemplate.LatestVersionNumber
-      MinSize: !Ref MinSize
-      MaxSize: !Ref MaxSize
-      DesiredCapacity: !Ref DesiredCapacity
-      TargetGroupARNs:
-        - !Ref BackendTargetGroup
+      MinSize: !If [RouteApiToBackend, !Ref MinSize, 0]
+      MaxSize: !If [RouteApiToBackend, !Ref MaxSize, 0]
+      DesiredCapacity: !If [RouteApiToBackend, !Ref DesiredCapacity, 0]
+      TargetGroupARNs: !If
+        - RouteApiToBackend
+        - - !Ref BackendTargetGroup
+        - !Ref AWS::NoValue
       HealthCheckType: ELB
       HealthCheckGracePeriod: 120
 
@@ -473,8 +475,12 @@ Outputs:
     Description: "Frontend URL (Next.js)"
     Value: !Sub "http://${ApplicationLoadBalancer.DNSName}/"
 
+  ApiRoutingMode:
+    Description: "ALB routing — use frontend so /api hits Next.js proxy"
+    Value: !Ref ApiRoutingMode
+
   BackendApiUrl:
-    Description: "Backend API URL"
+    Description: "Direct Nest URL (only when ApiRoutingMode=backend)"
     Value: !Sub "http://${ApplicationLoadBalancer.DNSName}/api/"
 
   FrontendInstanceId:
