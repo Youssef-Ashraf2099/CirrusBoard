@@ -69,15 +69,21 @@ export class TasksService {
     assigneeId: string,
     teamId: string,
   ): Promise<UserItem> {
-    const assignee = await this.validateAssigneeForTeam(teamId, assigneeId);
     const project = await this.projectsRepo.getProjectById(projectId);
     if (!project) {
       throw new NotFoundException("Project not found");
     }
+    const assignee = await this.resolveUser(assigneeId);
+    if (!assignee) {
+      throw new NotFoundException("Assignee not found");
+    }
     const roster = project.memberUserIds ?? [];
-    if (roster.length > 0 && !roster.includes(assignee.userId)) {
+    if (roster.length > 0 && roster.includes(assignee.userId)) {
+      return assignee;
+    }
+    if (!isTeamMember(assignee, this.normalizeTeamId(teamId))) {
       throw new BadRequestException(
-        "Assignee must be assigned to this project",
+        "Assignee must belong to the selected task team",
       );
     }
     return assignee;
